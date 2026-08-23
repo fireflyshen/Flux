@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Flux 支出热力图</title>
+  <rect width="32" height="32" rx="7" fill="#0d1117" />
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#30363d" />
+  <g>
+    <rect x="5" y="5" width="4" height="4" rx="0.8" fill="#0c2d6b" />
+    <rect x="11" y="5" width="4" height="4" rx="0.8" fill="#1158c7" />
+    <rect x="17" y="5" width="4" height="4" rx="0.8" fill="#1f6feb" />
+    <rect x="23" y="5" width="4" height="4" rx="0.8" fill="#21262d" />
+    <rect x="5" y="11" width="4" height="4" rx="0.8" fill="#1158c7" />
+    <rect x="11" y="11" width="4" height="4" rx="0.8" fill="#1f6feb" />
+    <rect x="17" y="11" width="4" height="4" rx="0.8" fill="#58a6ff" />
+    <rect x="23" y="11" width="4" height="4" rx="0.8" fill="#388bfd" />
+    <rect x="5" y="17" width="4" height="4" rx="0.8" fill="#0c2d6b" />
+    <rect x="11" y="17" width="4" height="4" rx="0.8" fill="#1158c7" />
+    <rect x="17" y="17" width="4" height="4" rx="0.8" fill="#1f6feb" />
+    <rect x="23" y="17" width="4" height="4" rx="0.8" fill="#58a6ff" />
+    <rect x="5" y="23" width="4" height="4" rx="0.8" fill="#1158c7" />
+    <rect x="11" y="23" width="4" height="4" rx="0.8" fill="#388bfd" />
+    <rect x="17" y="23" width="4" height="4" rx="0.8" fill="#21262d" />
+    <rect x="23" y="23" width="4" height="4" rx="0.8" fill="#21262d" />
+  </g>
+</svg>
