@@ -41,6 +41,17 @@ pnpm lint
 pnpm build
 ```
 
+## 自动部署
+
+推送到 GitHub 仓库的 `main` 分支后，GitHub Actions 会先安装锁定依赖，执行 lint、Worker 语法检查与生产构建；全部通过后再部署 `flux-money` 到 Cloudflare。失败的提交不会覆盖当前线上版本。
+
+部署需要仓库 Actions Secrets：
+
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`
+
+Cloudflare Token 只授予发布 Worker 所需的最小权限，不写入仓库。也可以在 GitHub Actions 页面手动运行 `Deploy Flux to Cloudflare`。
+
 ## 隐私
 
 本地与云端抽屉都可以显示交易明细；上传 R2 的快照包含商户、摘要、金额与分类，但会移除账本文件名和行号。R2 桶保持私有，`workers.dev` 入口由 Cloudflare Access 保护，只允许指定邮箱登录。
