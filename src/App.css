@@ -275,6 +275,17 @@
 .category-summary small { margin-top: 3px; color: var(--text-faint); font-size: 8px; font-variant-numeric: tabular-nums; }
 .category-summary > span { color: var(--text-soft); font-size: 10px; font-weight: 650; font-variant-numeric: tabular-nums; }
 
+.weekday-report { margin-bottom: 40px; }
+.weekday-bars { display: grid; gap: 9px; }
+.weekday-row { display: grid; grid-template-columns: 34px minmax(80px, 1fr) 74px 76px; align-items: center; gap: 10px; min-height: 23px; }
+.weekday-name, .weekday-value, .weekday-row small { color: var(--text-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
+.weekday-value { color: var(--text-soft); text-align: right; }
+.weekday-row small { text-align: right; }
+.weekday-track { height: 6px; overflow: hidden; border-radius: 99px; background: var(--surface-muted); }
+.weekday-track i { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: color-mix(in srgb, var(--accent) 66%, var(--border)); transition: width .55s var(--ease-apple); }
+.weekday-row[data-top='true'] .weekday-name, .weekday-row[data-top='true'] .weekday-value { color: var(--accent-deep); font-weight: 650; }
+.weekday-row[data-top='true'] .weekday-track i { background: var(--accent); }
+
 .spend-heading .eyebrow { display: block; margin-bottom: 10px; color: var(--text-faint); font-size: 10px; }
 .spend-heading h2 { font-size: clamp(38px, 4.2vw, 58px); font-variant-numeric: tabular-nums; }
 .spend-heading .page-meta { flex-wrap: wrap; }
@@ -553,6 +564,9 @@
   .metric-grid article + article { border-left: 0; border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent); }
   .metric-grid strong { font-size: 18px; }
   .report-panel { min-height: 60vh; padding: 0 2px 40px; }
+  .weekday-report { margin-bottom: 34px; }
+  .weekday-row { grid-template-columns: 34px minmax(60px, 1fr) 70px; gap: 8px; }
+  .weekday-row small { grid-column: 2 / -1; margin-top: -5px; text-align: left; }
   .report-toolbar { margin-bottom: 28px; gap: 15px; }
   .period-switch { width: 100%; }
   .period-switch button { flex: 1; height: 36px; font-size: 12px; }
@@ -670,6 +684,13 @@
   .reflection-editor { border-radius: 14px; }
   .reflection-editor textarea { min-height: calc(100dvh - 300px); padding: 44px 18px 24px; resize: none; }
   .reflection-editor > span { top: 15px; left: 18px; }
+}
+
+/* iPad/tablet: long reports must flow down from a safe top offset instead of
+   being vertically centered underneath the floating theme control. */
+@media (min-width: 761px) and (max-width: 1100px) and (pointer: coarse) {
+  .heatmap-page { align-items: start; padding-top: max(84px, calc(env(safe-area-inset-top) + 52px)); }
+  .page-utilities { top: max(16px, env(safe-area-inset-top)); right: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

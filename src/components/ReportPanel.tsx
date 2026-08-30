@@ -13,6 +13,8 @@ import { PixelLoader } from './PixelLoader'
 
 type Period = 'week' | 'month' | 'quarter' | 'year'
 
+const weekdayCopy = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+
 interface ReportPanelProps {
   year: number
   report: YearSpend | null
@@ -112,6 +114,16 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       })
     }
     const categoryTotal = categoryRows.reduce((sum, row) => sum + row.value, 0)
+    const weekdayTotals = weekdayCopy.map((name, weekday) => {
+      const matchingDays = days.filter((day) => fromDateKey(day.date).getDay() === weekday)
+      return {
+        name,
+        total: matchingDays.reduce((sum, day) => sum + amountOf(day, currency), 0),
+        spendDays: matchingDays.filter((day) => amountOf(day, currency) > 0).length,
+        days: matchingDays.length,
+      }
+    })
+    const weekdayMax = Math.max(...weekdayTotals.map((row) => row.total), 0)
     const peakDay = days.reduce<{ date: string; value: number } | null>((peak, day) => {
       const value = amountOf(day, currency)
       return !peak || value > peak.value ? { date: day.date, value } : peak
@@ -130,6 +142,8 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       visibleCategories,
       hiddenCategories,
       categoryTotal,
+      weekdayTotals,
+      weekdayMax,
       peakDay,
       highDays,
     }
@@ -176,6 +190,22 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             <article><span>日均</span><strong>{formatMoney(analysis.dailyAverage, currency)}</strong><small>按已过去的自然日计算</small></article>
             <article><span>单日峰值</span><strong>{formatMoney(analysis.peakDay?.value ?? 0, currency)}</strong><small>{analysis.peakDay ? `${Number(analysis.peakDay.date.slice(5, 7))} 月 ${Number(analysis.peakDay.date.slice(8, 10))} 日` : '这一周期暂无支出'}</small></article>
           </div>
+          <section className="weekday-report" aria-labelledby="weekday-report-title">
+            <div className="report-section-heading">
+              <div><div id="weekday-report-title" className="report-section-label">星期几更容易花钱</div><small>按当前周期每天的净支出汇总</small></div>
+              <span>{analysis.weekdayTotals.reduce((best, row) => row.total > best.total ? row : best, analysis.weekdayTotals[0]).name}最高</span>
+            </div>
+            <div className="weekday-bars">
+              {analysis.weekdayTotals.map((row) => (
+                <div className="weekday-row" key={row.name} data-top={row.total === analysis.weekdayMax && row.total > 0 || undefined}>
+                  <span className="weekday-name">{row.name}</span>
+                  <div className="weekday-track"><i style={{ width: `${analysis.weekdayMax <= 0 ? 0 : row.total / analysis.weekdayMax * 100}%` }} /></div>
+                  <span className="weekday-value">{formatMoney(row.total, currency)}</span>
+                  <small>{row.spendDays}/{row.days} 天有支出</small>
+                </div>
+              ))}
+            </div>
+          </section>
           <div className="report-section-heading">
             <div><div className="report-section-label">支出结构</div><small>{analysis.spendDays} 个支出日 · {analysis.noSpendDays} 个无支出日</small></div>
             <span>前五类 + Others</span>
