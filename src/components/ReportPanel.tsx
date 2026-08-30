@@ -76,6 +76,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const [period, setPeriod] = useState<Period>('month')
   const [anchor, setAnchor] = useState(() => yearAnchor(year))
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
+  const [selectedWeekday, setSelectedWeekday] = useState<number | null>(null)
   const { start, end } = periodRange(period, anchor)
 
   const analysis = useMemo(() => {
@@ -163,6 +164,17 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     })).sort((a, b) => b.day.localeCompare(a.day))
   }, [analysis.days, analysis.hiddenCategories, currency, selectedAccount])
 
+  const selectedWeekdayTransactions = useMemo(() => {
+    if (selectedWeekday === null) return []
+    return analysis.days.flatMap((day) => day.transactions.flatMap((transaction) => {
+      const value = Number(transaction.amounts[currency]?.net ?? 0)
+      return value === 0 ? [] : [{ day: day.date, transaction, value }]
+    })).filter(({ day }) => fromDateKey(day).getDay() === selectedWeekday)
+      .sort((a, b) => b.day.localeCompare(a.day))
+  }, [analysis.days, currency, selectedWeekday])
+
+  const selectedWeekdayTotal = selectedWeekdayTransactions.reduce((sum, row) => sum + row.value, 0)
+
   const canShift = (amount: number) => period !== 'year' && shiftAnchor(anchor, period, amount).getFullYear() === year
   return (
     <section className="report-panel" aria-label={`${year} 年支出洞察`} data-loading={loading || undefined}>
@@ -196,13 +208,13 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
               <span>{analysis.weekdayTotals.reduce((best, row) => row.total > best.total ? row : best, analysis.weekdayTotals[0]).name}最高</span>
             </div>
             <div className="weekday-bars">
-              {analysis.weekdayTotals.map((row) => (
-                <div className="weekday-row" key={row.name} data-top={row.total === analysis.weekdayMax && row.total > 0 || undefined}>
+              {analysis.weekdayTotals.map((row, weekday) => (
+                <button className="weekday-row" type="button" key={row.name} data-top={row.total === analysis.weekdayMax && row.total > 0 || undefined} onClick={() => setSelectedWeekday(weekday)} aria-haspopup="dialog">
                   <span className="weekday-name">{row.name}</span>
                   <div className="weekday-track"><i style={{ width: `${analysis.weekdayMax <= 0 ? 0 : row.total / analysis.weekdayMax * 100}%` }} /></div>
                   <span className="weekday-value">{formatMoney(row.total, currency)}</span>
                   <small>{row.spendDays}/{row.days} 天有支出</small>
-                </div>
+                </button>
               ))}
             </div>
           </section>
@@ -239,6 +251,30 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
               <div className="drawer-section-heading"><h3 id="report-transaction-title">具体明细</h3><span>按日期倒序</span></div>
               <div className="transaction-list report-transaction-list">
                 {selectedTransactions.map(({ day, transaction, value }) => (
+                  <article className="transaction-row report-transaction-row" key={`${day}-${transaction.id}`}>
+                    <time dateTime={day}>{formatDate(day)}</time>
+                    <div><strong>{transaction.payee || transaction.narration || '未命名交易'}</strong>{transaction.payee && transaction.narration && <small>{transaction.narration}</small>}</div>
+                    <span>{formatMoney(value, currency)}</span>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        </DrawerShell>
+      )}
+
+      {selectedWeekday !== null && (
+        <DrawerShell labelledBy="weekday-drawer-title" closeLabel="关闭星期明细" onClosed={() => setSelectedWeekday(null)}>
+          <div className="drawer-content report-detail-content">
+            <div className="page-heading report-detail-heading">
+              <span className="eyebrow">{rangeLabel(period, start, end)}</span>
+              <h2 id="weekday-drawer-title">{weekdayCopy[selectedWeekday]}消费明细</h2>
+              <div className="page-meta"><strong>{formatMoney(selectedWeekdayTotal, currency)}</strong><span>{selectedWeekdayTransactions.length} 笔交易</span></div>
+            </div>
+            <section aria-labelledby="weekday-transaction-title">
+              <div className="drawer-section-heading"><h3 id="weekday-transaction-title">具体明细</h3><span>按日期倒序</span></div>
+              <div className="transaction-list report-transaction-list">
+                {selectedWeekdayTransactions.length === 0 ? <div className="drawer-empty">这一周期没有该星期的支出</div> : selectedWeekdayTransactions.map(({ day, transaction, value }) => (
                   <article className="transaction-row report-transaction-row" key={`${day}-${transaction.id}`}>
                     <time dateTime={day}>{formatDate(day)}</time>
                     <div><strong>{transaction.payee || transaction.narration || '未命名交易'}</strong>{transaction.payee && transaction.narration && <small>{transaction.narration}</small>}</div>

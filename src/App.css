@@ -277,7 +277,9 @@
 
 .weekday-report { margin-bottom: 40px; }
 .weekday-bars { display: grid; gap: 9px; }
-.weekday-row { display: grid; grid-template-columns: 34px minmax(80px, 1fr) 74px 76px; align-items: center; gap: 10px; min-height: 23px; }
+.weekday-row { width: 100%; padding: 0; display: grid; grid-template-columns: 34px minmax(80px, 1fr) 74px 76px; align-items: center; gap: 10px; min-height: 23px; color: inherit; text-align: left; border: 0; background: transparent; cursor: pointer; }
+.weekday-row:hover .weekday-track { background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface-muted)); }
+.weekday-row:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent); outline-offset: 3px; border-radius: 5px; }
 .weekday-name, .weekday-value, .weekday-row small { color: var(--text-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
 .weekday-value { color: var(--text-soft); text-align: right; }
 .weekday-row small { text-align: right; }
