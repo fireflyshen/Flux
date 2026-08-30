@@ -688,11 +688,13 @@
   .reflection-editor > span { top: 15px; left: 18px; }
 }
 
-/* iPad/tablet: long reports must flow down from a safe top offset instead of
-   being vertically centered underneath the floating theme control. */
-@media (min-width: 761px) and (max-width: 1100px) and (pointer: coarse) {
+/* iPad/tablet: reserve both a top and a right safe area for the floating
+   theme control. This also covers landscape iPad viewports whose CSS width
+   is wider than the visual tablet breakpoint. */
+@media (min-width: 761px) and (pointer: coarse) {
   .heatmap-page { align-items: start; padding-top: max(84px, calc(env(safe-area-inset-top) + 52px)); }
   .page-utilities { top: max(16px, env(safe-area-inset-top)); right: 4px; }
+  .panel-heading { padding-right: 52px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
