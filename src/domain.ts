@@ -70,7 +70,8 @@ export function amountOf(day: DaySpend | undefined, currency: string, field: key
 export function isAccrualTransaction(transaction: ExpenseTransaction): boolean {
   if (transaction.kind === 'accrual' || transaction.recognition === 'accrual') return true
   // Backward-compatible fallback for snapshots created before explicit markers.
-  return /摊销|计提|折旧|摊提|应计|accrual|amorti[sz]ation/i.test(transaction.narration || '')
+  const label = [transaction.payee, transaction.narration].filter(Boolean).join(' ')
+  return /摊销|计提|折旧|摊提|应计|accrual|amorti[sz]ation/i.test(label)
 }
 
 export function transactionAmountOf(transaction: ExpenseTransaction, currency: string, field: keyof MoneyTotals = 'net'): number {
