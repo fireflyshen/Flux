@@ -9,7 +9,6 @@ import {
   formatMoney,
   fromDateKey,
   isAccrualTransaction,
-  quantileThresholds,
   transactionAmountOf,
   type DaySpend,
   type ExpenseCategory,
@@ -105,13 +104,13 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const [anchor, setAnchor] = useState(() => yearAnchor(year))
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
   const [selectedWeekday, setSelectedWeekday] = useState<number | null>(null)
+  const [openSection, setOpenSection] = useState<'weekday' | 'structure' | null>(null)
   const { start, end } = periodRange(period, anchor)
 
   const analysis = useMemo(() => {
     const reportDays = report?.days ?? []
     const days = daysInRange(reportDays, start, end)
     const total = days.reduce((sum, day) => sum + amountOf(day, currency), 0)
-    const gross = days.reduce((sum, day) => sum + amountOf(day, currency, 'gross'), 0)
     const refunds = days.reduce((sum, day) => sum + amountOf(day, currency, 'refunds'), 0)
     const behaviorNetTotal = days.reduce((sum, day) => sum + behaviorAmountOf(day, currency), 0)
     const behaviorGrossTotal = days.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0)
@@ -166,12 +165,6 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       }
     })
     const weekdayMax = Math.max(...weekdayTotals.map((row) => row.average), 0)
-    const peakDay = days.reduce<{ date: string; value: number } | null>((peak, day) => {
-      const value = behaviorGrossAmountOf(day, currency)
-      return !peak || value > peak.value ? { date: day.date, value } : peak
-    }, null)
-    const annualHighThreshold = quantileThresholds(report?.days ?? [], currency, behaviorGrossAmountOf)[3] ?? 0
-    const highDays = days.filter((day) => behaviorGrossAmountOf(day, currency) > annualHighThreshold && annualHighThreshold > 0).length
 
     const comparisonMonths: { days: DaySpend[]; total: number }[] = []
     if (period === 'month' && elapsedDays > 0) {
@@ -216,10 +209,8 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       behaviorGrossTotal,
       behaviorAvailable,
       accrualTotal,
-      gross,
       refunds,
       spendDays,
-      noSpendDays: Math.max(0, elapsedDays - spendDays),
       days,
       categoryRows,
       visibleCategories,
@@ -227,8 +218,6 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       categoryTotal,
       weekdayTotals,
       weekdayMax,
-      peakDay,
-      highDays,
       comparisonMonths: comparisonMonths.length,
       baselineAverage,
       difference,
@@ -237,15 +226,16 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     }
   }, [currency, end, period, report, start, year])
 
-  const comparisonHeadline = !analysis.behaviorAvailable
-    ? '行为口径暂不可用'
-    : period !== 'month' || analysis.comparisonMonths === 0
-      ? formatMoney(analysis.behaviorGrossTotal, currency)
-      : analysis.baselineAverage === 0
-        ? analysis.behaviorGrossTotal > 0 ? '本期出现新增支出' : '本期保持零支出'
-        : analysis.differenceRate !== null && Math.abs(analysis.differenceRate) < .02
-          ? `与近 ${analysis.comparisonMonths} 个月同期基本持平`
-          : `比近 ${analysis.comparisonMonths} 个月同期${(analysis.difference ?? 0) > 0 ? '高' : '低'} ${Math.round(Math.abs(analysis.differenceRate ?? 0) * 100)}%`
+  const comparisonCopy = period !== 'month' || analysis.comparisonMonths === 0
+    ? null
+    : analysis.baselineAverage === 0
+      ? analysis.behaviorGrossTotal > 0 ? '本期新增' : '保持为零'
+      : analysis.differenceRate !== null && Math.abs(analysis.differenceRate) < .02
+        ? '基本持平'
+        : `${(analysis.difference ?? 0) > 0 ? '↑' : '↓'} ${Math.round(Math.abs(analysis.differenceRate ?? 0) * 100)}%`
+  const comparisonTone = (analysis.difference ?? 0) > 0 ? 'up' : (analysis.difference ?? 0) < 0 ? 'down' : 'flat'
+  const topWeekday = analysis.weekdayTotals.reduce((best, row) => row.average > best.average ? row : best, analysis.weekdayTotals[0])
+  const topCategory = analysis.visibleCategories[0]
 
   const selectedCategory = analysis.visibleCategories.find((row) => row.account === selectedAccount) ?? null
   const selectedTransactions = useMemo(() => {
@@ -295,57 +285,73 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
         <div className="report-empty"><button type="button" onClick={onRetry} title={error}>账本读取失败 · 重试</button></div>
       ) : analysis.categoryRows.length > 0 ? (
         <>
-          <section className="behavior-overview" aria-labelledby="behavior-overview-title">
-            <span id="behavior-overview-title">消费节奏</span>
-            <strong>{comparisonHeadline}</strong>
-            <small>{analysis.behaviorAvailable ? `行为毛支出 ${formatMoney(analysis.behaviorGrossTotal, currency)} · ${analysis.spendDays} 个支出日 · 净支出 ${formatMoney(analysis.behaviorNetTotal, currency)}` : '当前快照缺少交易明细，未使用期间成本代替行为数据'}</small>
-            {analysis.drivers.length > 0 && analysis.comparisonMonths > 0 && (
-              <div className="behavior-drivers" aria-label="主要变化来源">
-                {analysis.drivers.map((driver) => <span key={driver.account}>{driver.name}<b>{driver.difference > 0 ? '+' : ''}{formatMoney(driver.difference, currency)}</b></span>)}
+          <section className="report-balance" aria-label="周期核心数据">
+            <article>
+              <div><span>行为支出</span><small>{analysis.behaviorAvailable ? `${analysis.spendDays} 个支出日 · 净支出 ${formatMoney(analysis.behaviorNetTotal, currency)}` : '缺少交易明细，未使用期间成本代替'}</small></div>
+              <strong>{analysis.behaviorAvailable ? formatMoney(analysis.behaviorGrossTotal, currency) : '—'}</strong>
+              {comparisonCopy && <em data-tone={comparisonTone}>{comparisonCopy}</em>}
+            </article>
+            <article>
+              <div><span>期间成本</span><small>含非现金成本 {formatMoney(analysis.accrualTotal, currency)}{analysis.refunds > 0 ? ` · 退款 ${formatMoney(analysis.refunds, currency)}` : ''}</small></div>
+              <strong>{formatMoney(analysis.total, currency)}</strong>
+            </article>
+          </section>
+
+          {analysis.drivers.length > 0 && analysis.comparisonMonths > 0 && (
+            <section className="change-summary" aria-labelledby="change-summary-title">
+              <div className="quiet-heading"><span id="change-summary-title">主要变化</span><small>较近 {analysis.comparisonMonths} 个月同期</small></div>
+              <div className="change-list">
+                {analysis.drivers.map((driver) => <div key={driver.account}><span>{driver.name}</span><strong data-tone={driver.difference > 0 ? 'up' : 'down'}>{driver.difference > 0 ? '+' : ''}{formatMoney(driver.difference, currency)}</strong></div>)}
               </div>
-            )}
-          </section>
-          <div className="metric-grid" aria-label="周期摘要">
-            <article><span>期间成本</span><strong>{formatMoney(analysis.total, currency)}</strong><small>{analysis.refunds > 0 ? `已抵扣退款 ${formatMoney(analysis.refunds, currency)}` : `总支出 ${formatMoney(analysis.gross, currency)}`}</small></article>
-            <article><span>非现金成本</span><strong>{formatMoney(analysis.accrualTotal, currency)}</strong><small>摊销与计提</small></article>
-            <article><span>行为峰值</span><strong>{formatMoney(analysis.peakDay?.value ?? 0, currency)}</strong><small>{analysis.peakDay ? `${Number(analysis.peakDay.date.slice(5, 7))} 月 ${Number(analysis.peakDay.date.slice(8, 10))} 日` : '这一周期暂无支出'}</small></article>
-          </div>
-          <section className="weekday-report" aria-labelledby="weekday-report-title">
-            <div className="report-section-heading">
-              <div><div id="weekday-report-title" className="report-section-label">星期几更容易花钱</div><small>平均行为毛支出 · 同时显示消费频率</small></div>
-              <span>{analysis.weekdayTotals.reduce((best, row) => row.average > best.average ? row : best, analysis.weekdayTotals[0]).name}最高</span>
-            </div>
-            <div className="weekday-bars">
-              {analysis.weekdayTotals.map((row, weekday) => (
-                <button className="weekday-row" type="button" key={row.name} data-top={row.average === analysis.weekdayMax && row.average > 0 || undefined} onClick={() => setSelectedWeekday(weekday)} aria-haspopup="dialog">
-                  <span className="weekday-name">{row.name}</span>
-                  <div className="weekday-track"><i style={{ width: `${analysis.weekdayMax <= 0 ? 0 : row.average / analysis.weekdayMax * 100}%` }} /></div>
-                  <span className="weekday-value">{formatMoney(row.average, currency)}</span>
-                  <small>{row.spendDays}/{row.days} 天 · {row.days === 0 ? 0 : Math.round(row.spendDays / row.days * 100)}%</small>
-                </button>
-              ))}
-            </div>
-          </section>
-          <div className="report-section-heading">
-            <div><div className="report-section-label">期间成本结构</div><small>{analysis.spendDays} 个支出日 · {analysis.noSpendDays} 个无支出日</small></div>
-            <span>前五类 + Others</span>
-          </div>
-          <div className="composition-bar" aria-label="分类支出占比">
-            {analysis.visibleCategories.map((row, index) => <i key={row.account} data-tone={index} style={{ width: `${analysis.categoryTotal <= 0 ? 0 : row.value / analysis.categoryTotal * 100}%` }} />)}
-          </div>
-          <div className="category-summary-grid">
-            {analysis.visibleCategories.map((row, index) => (
-              <button className="category-summary" type="button" key={row.account} onClick={() => setSelectedAccount(row.account)} aria-haspopup="dialog">
-                <i data-tone={index} aria-hidden="true" />
-                <div><strong>{row.name}</strong><small>{formatMoney(row.value, currency)}</small></div>
-                <span>{analysis.categoryTotal <= 0 ? '0%' : `${Math.round(row.value / analysis.categoryTotal * 100)}%`}</span>
+            </section>
+          )}
+
+          <div className="report-disclosures">
+            <section>
+              <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'weekday'} onClick={() => setOpenSection((current) => current === 'weekday' ? null : 'weekday')}>
+                <div><strong>消费习惯</strong><small>{topWeekday.name}平均 {formatMoney(topWeekday.average, currency)} · {topWeekday.spendDays}/{topWeekday.days} 天消费</small></div>
+                <span>{openSection === 'weekday' ? '收起' : '查看'}</span>
               </button>
-            ))}
+              <div className="disclosure-body" data-open={openSection === 'weekday' || undefined}>
+                <div><div className="weekday-bars">
+                  {analysis.weekdayTotals.map((row, weekday) => (
+                    <button className="weekday-row" type="button" key={row.name} data-top={row.average === analysis.weekdayMax && row.average > 0 || undefined} onClick={() => setSelectedWeekday(weekday)} aria-haspopup="dialog">
+                      <span className="weekday-name">{row.name}</span>
+                      <div className="weekday-track"><i style={{ width: `${analysis.weekdayMax <= 0 ? 0 : row.average / analysis.weekdayMax * 100}%` }} /></div>
+                      <span className="weekday-value">{formatMoney(row.average, currency)}</span>
+                      <small>{row.spendDays}/{row.days} 天 · {row.days === 0 ? 0 : Math.round(row.spendDays / row.days * 100)}%</small>
+                    </button>
+                  ))}
+                </div></div>
+              </div>
+            </section>
+            <section>
+              <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'structure'} onClick={() => setOpenSection((current) => current === 'structure' ? null : 'structure')}>
+                <div><strong>期间成本结构</strong><small>{topCategory ? `${topCategory.name} · ${Math.round(topCategory.value / analysis.categoryTotal * 100)}%` : '暂无分类'}</small></div>
+                <span>{openSection === 'structure' ? '收起' : '查看'}</span>
+              </button>
+              <div className="disclosure-body" data-open={openSection === 'structure' || undefined}>
+                <div>
+                  <div className="composition-bar" aria-label="分类支出占比">
+                    {analysis.visibleCategories.map((row, index) => <i key={row.account} data-tone={index} style={{ width: `${analysis.categoryTotal <= 0 ? 0 : row.value / analysis.categoryTotal * 100}%` }} />)}
+                  </div>
+                  <div className="category-summary-grid">
+                    {analysis.visibleCategories.map((row, index) => (
+                      <button className="category-summary" type="button" key={row.account} onClick={() => setSelectedAccount(row.account)} aria-haspopup="dialog">
+                        <i data-tone={index} aria-hidden="true" />
+                        <div><strong>{row.name}</strong><small>{formatMoney(row.value, currency)}</small></div>
+                        <span>{analysis.categoryTotal <= 0 ? '0%' : `${Math.round(row.value / analysis.categoryTotal * 100)}%`}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </>
       ) : <div className="report-empty">这一周期没有 {currency} 支出</div>}
 
-      <footer className="report-footnote">星期与峰值按行为毛支出，排除摊销/计提；期间成本保留全部费用<span aria-hidden="true">·</span>{analysis.highDays} 个高于年度日常区间的支出日</footer>
+      <footer className="report-footnote">行为口径排除摊销与计提 · 期间成本保留全部费用</footer>
 
       {selectedCategory && (
         <DrawerShell labelledBy="report-drawer-title" closeLabel="关闭分类明细" onClosed={() => setSelectedAccount(null)}>
