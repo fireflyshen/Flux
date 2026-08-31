@@ -17,6 +17,9 @@ export interface ExpenseTransaction {
   source: string | null
   amounts: Record<string, MoneyTotals>
   categories: ExpenseCategory[]
+  /** Optional export-time semantic marker for non-cash recognition entries. */
+  kind?: 'accrual' | 'cash' | string
+  recognition?: 'accrual' | 'cash' | string
 }
 
 export interface DaySpend {
@@ -64,6 +67,30 @@ export function amountOf(day: DaySpend | undefined, currency: string, field: key
   return Number(day?.totals[currency]?.[field] ?? 0)
 }
 
+export function isAccrualTransaction(transaction: ExpenseTransaction): boolean {
+  if (transaction.kind === 'accrual' || transaction.recognition === 'accrual') return true
+  // Backward-compatible fallback for snapshots created before explicit markers.
+  return /摊销|计提|折旧|摊提|应计|accrual|amorti[sz]ation/i.test(transaction.narration || '')
+}
+
+export function transactionAmountOf(transaction: ExpenseTransaction, currency: string, field: keyof MoneyTotals = 'net'): number {
+  return Number(transaction.amounts[currency]?.[field] ?? 0)
+}
+
+export function behaviorAmountOf(day: DaySpend | undefined, currency: string, field: keyof MoneyTotals = 'net'): number {
+  if (!day) return 0
+  if (day.transactions.length === 0) return amountOf(day, currency, field)
+  return day.transactions
+    .filter((transaction) => !isAccrualTransaction(transaction))
+    .reduce((sum, transaction) => sum + transactionAmountOf(transaction, currency, field), 0)
+}
+
+export function accrualAmountOf(day: DaySpend | undefined, currency: string, field: keyof MoneyTotals = 'net'): number {
+  return day?.transactions
+    .filter(isAccrualTransaction)
+    .reduce((sum, transaction) => sum + transactionAmountOf(transaction, currency, field), 0) ?? 0
+}
+
 export function formatMoney(value: number | string, currency: string, maximumFractionDigits = 2): string {
   const amount = typeof value === 'number' ? value : Number(value)
   try {
@@ -79,9 +106,9 @@ export function formatMoney(value: number | string, currency: string, maximumFra
   }
 }
 
-export function quantileThresholds(days: DaySpend[], currency: string): number[] {
+export function quantileThresholds(days: DaySpend[], currency: string, reader: (day: DaySpend | undefined, currency: string) => number = amountOf): number[] {
   const values = days
-    .map((day) => amountOf(day, currency))
+    .map((day) => reader(day, currency))
     .filter((amount) => amount > 0)
     .sort((a, b) => a - b)
 
@@ -95,9 +122,9 @@ export function scoreLevel(amount: number, thresholds: number[]): number {
   return index === -1 ? 5 : index + 1
 }
 
-export function medianDailySpend(days: DaySpend[], currency: string): number {
+export function medianDailySpend(days: DaySpend[], currency: string, reader: (day: DaySpend | undefined, currency: string) => number = amountOf): number {
   const values = days
-    .map((day) => amountOf(day, currency))
+    .map((day) => reader(day, currency))
     .filter((amount) => amount > 0)
     .sort((a, b) => a - b)
   if (values.length === 0) return 0

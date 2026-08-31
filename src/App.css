@@ -287,6 +287,7 @@
 .weekday-track i { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: color-mix(in srgb, var(--accent) 66%, var(--border)); transition: width .55s var(--ease-apple); }
 .weekday-row[data-top='true'] .weekday-name, .weekday-row[data-top='true'] .weekday-value { color: var(--accent-deep); font-weight: 650; }
 .weekday-row[data-top='true'] .weekday-track i { background: var(--accent); }
+.report-scope-note { margin: -22px 0 34px; color: var(--text-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
 
 .spend-heading .eyebrow { display: block; margin-bottom: 10px; color: var(--text-faint); font-size: 10px; }
 .spend-heading h2 { font-size: clamp(38px, 4.2vw, 58px); font-variant-numeric: tabular-nums; }

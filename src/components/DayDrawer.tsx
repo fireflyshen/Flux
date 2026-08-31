@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { amountOf, formatDate, formatMoney, type DaySpend } from '../domain'
+import { behaviorAmountOf, formatDate, formatMoney, isAccrualTransaction, type DaySpend, type ExpenseCategory } from '../domain'
 import { DrawerShell } from './DrawerShell'
 import { PixelLoader } from './PixelLoader'
 
@@ -26,11 +26,27 @@ export function DayDrawer({ date, day, currency, median, loading, error, onClose
   const [mobileSection, setMobileSection] = useState<'categories' | 'transactions'>('categories')
   const contentRef = useRef<HTMLDivElement>(null)
 
-  const categories = useMemo(() => day?.categories.filter((item) => item.currency === currency).sort((a, b) => Number(b.net) - Number(a.net)) ?? [], [currency, day])
-  const transactions = useMemo(() => day?.transactions.filter((item) => item.amounts[currency]) ?? [], [currency, day])
-  const net = amountOf(day ?? undefined, currency)
-  const gross = amountOf(day ?? undefined, currency, 'gross')
-  const refunds = amountOf(day ?? undefined, currency, 'refunds')
+  const transactions = useMemo(() => day?.transactions.filter((item) => item.amounts[currency] && !isAccrualTransaction(item)) ?? [], [currency, day])
+  const categories = useMemo(() => {
+    if (!day) return []
+    if (day.transactions.length === 0) return day.categories.filter((item) => item.currency === currency).sort((a, b) => Number(b.net) - Number(a.net))
+    const rows = new Map<string, ExpenseCategory>()
+    for (const transaction of transactions) {
+      for (const category of transaction.categories.filter((item) => item.currency === currency)) {
+        const current = rows.get(category.account)
+        if (!current) rows.set(category.account, { ...category })
+        else {
+          current.gross = String(Number(current.gross) + Number(category.gross))
+          current.refunds = String(Number(current.refunds) + Number(category.refunds))
+          current.net = String(Number(current.net) + Number(category.net))
+        }
+      }
+    }
+    return [...rows.values()].sort((a, b) => Number(b.net) - Number(a.net))
+  }, [currency, day, transactions])
+  const net = behaviorAmountOf(day ?? undefined, currency)
+  const gross = behaviorAmountOf(day ?? undefined, currency, 'gross')
+  const refunds = behaviorAmountOf(day ?? undefined, currency, 'refunds')
   const maxCategory = Math.max(0, ...categories.map((item) => Number(item.net)))
 
   const showMobileSection = (section: 'categories' | 'transactions') => {
@@ -45,7 +61,7 @@ export function DayDrawer({ date, day, currency, median, loading, error, onClose
             <div className="page-heading spend-heading">
               <span className="eyebrow">{formatDate(day.date || date)}</span>
               <h2 id="drawer-title">{formatMoney(net, currency)}</h2>
-              <div className="page-meta"><strong>{comparisonCopy(net, median)}</strong><span>总支出 {formatMoney(gross, currency)}{refunds > 0 ? ` · 退款 ${formatMoney(refunds, currency)}` : ''}</span></div>
+              <div className="page-meta"><strong>{comparisonCopy(net, median)}</strong><span>行为支出 {formatMoney(gross, currency)}{refunds > 0 ? ` · 退款 ${formatMoney(refunds, currency)}` : ''}</span></div>
             </div>
 
             <nav className="mobile-section-switch" aria-label="日期内容">

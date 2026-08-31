@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { fetchDay, fetchMeta, fetchYear } from './api'
-import { amountOf, medianDailySpend, quantileThresholds, type DaySpend, type YearSpend } from './domain'
+import { behaviorAmountOf, medianDailySpend, quantileThresholds, type DaySpend, type YearSpend } from './domain'
 import { DayDrawer } from './components/DayDrawer'
 import { Heatmap } from './components/Heatmap'
 import { PixelLoader } from './components/PixelLoader'
@@ -141,10 +141,10 @@ function App() {
     setDay(null)
   }
 
-  const thresholds = useMemo(() => quantileThresholds(summary?.days ?? [], currency), [currency, summary])
-  const highSpendDays = useMemo(() => summary?.days.filter((item) => amountOf(item, currency) > (thresholds[3] ?? 0) && (thresholds[3] ?? 0) > 0).length ?? 0, [currency, summary, thresholds])
-  const spendDays = useMemo(() => summary?.days.filter((item) => amountOf(item, currency) > 0).length ?? 0, [currency, summary])
-  const median = useMemo(() => medianDailySpend(summary?.days ?? [], currency), [currency, summary])
+  const thresholds = useMemo(() => quantileThresholds(summary?.days ?? [], currency, behaviorAmountOf), [currency, summary])
+  const highSpendDays = useMemo(() => summary?.days.filter((item) => behaviorAmountOf(item, currency) > (thresholds[3] ?? 0) && (thresholds[3] ?? 0) > 0).length ?? 0, [currency, summary, thresholds])
+  const spendDays = useMemo(() => summary?.days.filter((item) => behaviorAmountOf(item, currency) > 0).length ?? 0, [currency, summary])
+  const median = useMemo(() => medianDailySpend(summary?.days ?? [], currency, behaviorAmountOf), [currency, summary])
   const panelLabel = `${year} 年 ${currency} ${view === 'heatmap' ? '支出热力图' : '支出洞察'}`
 
   return (

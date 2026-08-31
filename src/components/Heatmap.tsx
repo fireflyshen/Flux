@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import {
-  amountOf,
+  behaviorAmountOf,
   formatMoney,
   fromDateKey,
   quantileThresholds,
@@ -58,7 +58,7 @@ export function Heatmap({ year, days, currency, selectedDate, onSelect }: Heatma
   const scrollRef = useRef<HTMLDivElement>(null)
   const summaryMap = useMemo(() => new Map(days.map((day) => [day.date, day])), [days])
   const weeks = useMemo(() => buildWeeks(year, summaryMap), [year, summaryMap])
-  const thresholds = useMemo(() => quantileThresholds(days, currency), [currency, days])
+  const thresholds = useMemo(() => quantileThresholds(days, currency, behaviorAmountOf), [currency, days])
   const monthLabels = useMemo(() => {
     const labels: { month: string; week: number }[] = []
     let lastMonth = -1
@@ -101,10 +101,10 @@ export function Heatmap({ year, days, currency, selectedDate, onSelect }: Heatma
             <div className="heatmap-week" key={week[0].date}>
               {week.map((day) => {
                 if (!day.inYear) return <span className="heatmap-blank" key={day.date} />
-                const amount = amountOf(day.summary, currency)
+                const amount = behaviorAmountOf(day.summary, currency)
                 const level = day.summary ? scoreLevel(amount, thresholds) : -1
                 const dateLabel = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(fromDateKey(day.date))
-                const statusLabel = day.summary ? `净支出 ${formatMoney(amount, currency)}` : '没有支出记录'
+                const statusLabel = day.summary ? `行为支出 ${formatMoney(amount, currency)}` : '没有支出记录'
                 return (
                   <button
                     type="button"
