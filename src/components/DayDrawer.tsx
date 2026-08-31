@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { behaviorAmountOf, formatDate, formatMoney, isAccrualTransaction, type DaySpend, type ExpenseCategory } from '../domain'
+import { behaviorAmountOf, behaviorDetailAvailable, formatDate, formatMoney, isAccrualTransaction, type DaySpend, type ExpenseCategory } from '../domain'
 import { DrawerShell } from './DrawerShell'
 import { PixelLoader } from './PixelLoader'
 
@@ -25,11 +25,12 @@ function comparisonCopy(amount: number, median: number) {
 export function DayDrawer({ date, day, currency, median, loading, error, onClosed }: DayDrawerProps) {
   const [mobileSection, setMobileSection] = useState<'categories' | 'transactions'>('categories')
   const contentRef = useRef<HTMLDivElement>(null)
+  const detailAvailable = behaviorDetailAvailable(day ?? undefined, currency)
 
   const transactions = useMemo(() => day?.transactions.filter((item) => item.amounts[currency] && !isAccrualTransaction(item)) ?? [], [currency, day])
   const categories = useMemo(() => {
     if (!day) return []
-    if (day.transactions.length === 0) return day.categories.filter((item) => item.currency === currency).sort((a, b) => Number(b.net) - Number(a.net))
+    if (day.transactions.length === 0) return []
     const rows = new Map<string, ExpenseCategory>()
     for (const transaction of transactions) {
       for (const category of transaction.categories.filter((item) => item.currency === currency)) {
@@ -42,12 +43,12 @@ export function DayDrawer({ date, day, currency, median, loading, error, onClose
         }
       }
     }
-    return [...rows.values()].sort((a, b) => Number(b.net) - Number(a.net))
+    return [...rows.values()].sort((a, b) => Number(b.gross) - Number(a.gross))
   }, [currency, day, transactions])
   const net = behaviorAmountOf(day ?? undefined, currency)
   const gross = behaviorAmountOf(day ?? undefined, currency, 'gross')
   const refunds = behaviorAmountOf(day ?? undefined, currency, 'refunds')
-  const maxCategory = Math.max(0, ...categories.map((item) => Number(item.net)))
+  const maxCategory = Math.max(0, ...categories.map((item) => Number(item.gross)))
 
   const showMobileSection = (section: 'categories' | 'transactions') => {
     setMobileSection(section)
@@ -60,8 +61,8 @@ export function DayDrawer({ date, day, currency, median, loading, error, onClose
           <div className="drawer-content" ref={contentRef} data-mobile-section={mobileSection}>
             <div className="page-heading spend-heading">
               <span className="eyebrow">{formatDate(day.date || date)}</span>
-              <h2 id="drawer-title">{formatMoney(net, currency)}</h2>
-              <div className="page-meta"><strong>{comparisonCopy(net, median)}</strong><span>行为支出 {formatMoney(gross, currency)}{refunds > 0 ? ` · 退款 ${formatMoney(refunds, currency)}` : ''}</span></div>
+              <h2 id="drawer-title">{detailAvailable ? formatMoney(gross, currency) : '行为口径不可用'}</h2>
+              <div className="page-meta"><strong>{detailAvailable ? comparisonCopy(gross, median) : '这一天缺少交易明细'}</strong>{detailAvailable && <span>退款 {formatMoney(refunds, currency)} · 净支出 {formatMoney(net, currency)}</span>}</div>
             </div>
 
             <nav className="mobile-section-switch" aria-label="日期内容">
@@ -70,9 +71,9 @@ export function DayDrawer({ date, day, currency, median, loading, error, onClose
             </nav>
 
             <section className="spend-category-section" aria-labelledby="category-title">
-              <div className="drawer-section-heading"><h3 id="category-title">支出分类</h3><span>{categories.length} 类</span></div>
+              <div className="drawer-section-heading"><h3 id="category-title">行为支出分类</h3><span>{categories.length} 类</span></div>
               {categories.length > 0 ? <div className="category-list">{categories.map((category) => {
-                const value = Number(category.net)
+                const value = Number(category.gross)
                 return <article className="category-row" key={category.account}>
                   <div><strong>{category.name}</strong><span>{formatMoney(value, currency)}</span></div>
                   <div className="report-bar" aria-hidden="true"><i style={{ width: `${maxCategory <= 0 ? 0 : Math.max(0, value) / maxCategory * 100}%` }} /></div>

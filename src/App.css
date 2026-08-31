@@ -10,6 +10,7 @@
   --heat-3: #80ccff;
   --heat-4: #54aeff;
   --heat-5: #0969da;
+  --refund: #1a7f37;
 }
 
 :root[data-theme='dark'] {
@@ -20,6 +21,7 @@
   --heat-3: #1f6feb;
   --heat-4: #388bfd;
   --heat-5: #58a6ff;
+  --refund: #3fb950;
 }
 
 .app-shell { min-height: 100svh; overflow-x: clip; }
@@ -167,11 +169,14 @@
 }
 
 .heatmap-cell[data-level='0'] { background: var(--heat-0); }
+.heatmap-cell[data-level='-1'] { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 58%, transparent); }
 .heatmap-cell[data-level='1'] { background: var(--heat-1); }
 .heatmap-cell[data-level='2'] { background: var(--heat-2); }
 .heatmap-cell[data-level='3'] { background: var(--heat-3); }
 .heatmap-cell[data-level='4'] { background: var(--heat-4); }
 .heatmap-cell[data-level='5'] { background: var(--heat-5); }
+.heatmap-cell[data-detail-unavailable] { background: repeating-linear-gradient(135deg, var(--surface-muted) 0 3px, transparent 3px 6px); box-shadow: inset 0 0 0 1px var(--border); }
+.heatmap-cell[data-refund]::after { content: ''; position: absolute; right: -2px; bottom: -2px; width: 4px; height: 4px; border: 1px solid var(--bg); border-radius: 50%; background: var(--refund); }
 .heatmap-cell:hover:not(:disabled) { z-index: 1; transform: scale(1.35); box-shadow: 0 0 0 2px var(--bg); }
 .heatmap-cell[data-today] { box-shadow: 0 0 0 1px var(--accent-deep); }
 .heatmap-cell[data-selected] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
@@ -189,6 +194,7 @@
 .legend { display: flex; align-items: center; gap: 4px; }
 .legend span { margin: 0 3px; color: var(--text-faint); font-size: 8px; }
 .legend i { width: 9px; height: 9px; border-radius: 2px; background: var(--heat-empty); }
+.legend i[data-level='-1'] { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 58%, transparent); }
 .legend i[data-level='1'] { background: var(--heat-1); }
 .legend i[data-level='2'] { background: var(--heat-2); }
 .legend i[data-level='3'] { background: var(--heat-3); }

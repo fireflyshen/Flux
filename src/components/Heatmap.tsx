@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import {
   behaviorAmountOf,
+  behaviorDetailAvailable,
+  behaviorGrossAmountOf,
   formatMoney,
   fromDateKey,
   quantileThresholds,
@@ -58,7 +60,7 @@ export function Heatmap({ year, days, currency, selectedDate, onSelect }: Heatma
   const scrollRef = useRef<HTMLDivElement>(null)
   const summaryMap = useMemo(() => new Map(days.map((day) => [day.date, day])), [days])
   const weeks = useMemo(() => buildWeeks(year, summaryMap), [year, summaryMap])
-  const thresholds = useMemo(() => quantileThresholds(days, currency, behaviorAmountOf), [currency, days])
+  const thresholds = useMemo(() => quantileThresholds(days, currency, behaviorGrossAmountOf), [currency, days])
   const monthLabels = useMemo(() => {
     const labels: { month: string; week: number }[] = []
     let lastMonth = -1
@@ -101,15 +103,19 @@ export function Heatmap({ year, days, currency, selectedDate, onSelect }: Heatma
             <div className="heatmap-week" key={week[0].date}>
               {week.map((day) => {
                 if (!day.inYear) return <span className="heatmap-blank" key={day.date} />
-                const amount = behaviorAmountOf(day.summary, currency)
+                const amount = behaviorGrossAmountOf(day.summary, currency)
+                const refunds = behaviorAmountOf(day.summary, currency, 'refunds')
+                const detailAvailable = behaviorDetailAvailable(day.summary, currency)
                 const level = day.summary ? scoreLevel(amount, thresholds) : -1
                 const dateLabel = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(fromDateKey(day.date))
-                const statusLabel = day.summary ? `行为支出 ${formatMoney(amount, currency)}` : '没有支出记录'
+                const statusLabel = !day.summary ? '没有支出记录' : !detailAvailable ? '缺少交易明细，无法计算行为支出' : `行为毛支出 ${formatMoney(amount, currency)}${refunds > 0 ? `，退款 ${formatMoney(refunds, currency)}` : ''}`
                 return (
                   <button
                     type="button"
                     className="heatmap-cell"
                     data-level={level}
+                    data-refund={refunds > 0 || undefined}
+                    data-detail-unavailable={!detailAvailable || undefined}
                     data-today={day.date === toDateKey(new Date()) || undefined}
                     data-selected={day.date === selectedDate || undefined}
                     key={day.date}

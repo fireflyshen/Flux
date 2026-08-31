@@ -80,10 +80,21 @@ export function transactionAmountOf(transaction: ExpenseTransaction, currency: s
 
 export function behaviorAmountOf(day: DaySpend | undefined, currency: string, field: keyof MoneyTotals = 'net'): number {
   if (!day) return 0
-  if (day.transactions.length === 0) return amountOf(day, currency, field)
+  // Fail closed: without transaction detail we cannot safely separate accruals.
+  if (day.transactions.length === 0) return 0
   return day.transactions
     .filter((transaction) => !isAccrualTransaction(transaction))
     .reduce((sum, transaction) => sum + transactionAmountOf(transaction, currency, field), 0)
+}
+
+export function behaviorGrossAmountOf(day: DaySpend | undefined, currency: string): number {
+  return behaviorAmountOf(day, currency, 'gross')
+}
+
+export function behaviorDetailAvailable(day: DaySpend | undefined, currency: string): boolean {
+  if (!day) return true
+  const hasCurrencyTotals = amountOf(day, currency, 'gross') !== 0 || amountOf(day, currency, 'refunds') !== 0
+  return !hasCurrencyTotals || day.transactions.some((transaction) => transaction.amounts[currency])
 }
 
 export function accrualAmountOf(day: DaySpend | undefined, currency: string, field: keyof MoneyTotals = 'net'): number {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { fetchDay, fetchMeta, fetchYear } from './api'
-import { behaviorAmountOf, medianDailySpend, quantileThresholds, type DaySpend, type YearSpend } from './domain'
+import { behaviorDetailAvailable, behaviorGrossAmountOf, medianDailySpend, quantileThresholds, type DaySpend, type YearSpend } from './domain'
 import { DayDrawer } from './components/DayDrawer'
 import { Heatmap } from './components/Heatmap'
 import { PixelLoader } from './components/PixelLoader'
@@ -141,10 +141,11 @@ function App() {
     setDay(null)
   }
 
-  const thresholds = useMemo(() => quantileThresholds(summary?.days ?? [], currency, behaviorAmountOf), [currency, summary])
-  const highSpendDays = useMemo(() => summary?.days.filter((item) => behaviorAmountOf(item, currency) > (thresholds[3] ?? 0) && (thresholds[3] ?? 0) > 0).length ?? 0, [currency, summary, thresholds])
-  const spendDays = useMemo(() => summary?.days.filter((item) => behaviorAmountOf(item, currency) > 0).length ?? 0, [currency, summary])
-  const median = useMemo(() => medianDailySpend(summary?.days ?? [], currency, behaviorAmountOf), [currency, summary])
+  const behaviorAvailable = useMemo(() => summary?.days.every((item) => behaviorDetailAvailable(item, currency)) ?? true, [currency, summary])
+  const thresholds = useMemo(() => quantileThresholds(summary?.days ?? [], currency, behaviorGrossAmountOf), [currency, summary])
+  const highSpendDays = useMemo(() => summary?.days.filter((item) => behaviorGrossAmountOf(item, currency) > (thresholds[3] ?? 0) && (thresholds[3] ?? 0) > 0).length ?? 0, [currency, summary, thresholds])
+  const spendDays = useMemo(() => summary?.days.filter((item) => behaviorGrossAmountOf(item, currency) > 0).length ?? 0, [currency, summary])
+  const median = useMemo(() => medianDailySpend(summary?.days ?? [], currency, behaviorGrossAmountOf), [currency, summary])
   const panelLabel = `${year} 年 ${currency} ${view === 'heatmap' ? '支出热力图' : '支出洞察'}`
 
   return (
@@ -178,8 +179,8 @@ function App() {
               {yearLoading && !summary ? <PixelLoader /> : <Heatmap year={year} days={summary?.days ?? []} currency={currency} selectedDate={selectedDate} onSelect={(date) => void openDay(date)} />}
             </div>
             <div className="heatmap-meta">
-              <span className="heatmap-insight">{spendDays > 0 ? `${spendDays} 个支出日 · ${highSpendDays} 个高支出日` : `还没有 ${currency} 支出`}</span>
-              <div className="legend" aria-label="支出由少到多"><span>少</span>{[-1, 1, 2, 3, 4, 5].map((level) => <i key={level} data-level={level} />)}<span>多</span></div>
+              <span className="heatmap-insight">{!behaviorAvailable ? '缺少交易明细，无法计算行为支出' : spendDays > 0 ? `${spendDays} 个支出日 · ${highSpendDays} 个高支出日` : `还没有 ${currency} 行为支出`}</span>
+              <div className="legend" aria-label="相对本年度日常行为毛支出"><span>低</span>{[-1, 0, 1, 2, 3, 4, 5].map((level) => <i key={level} data-level={level} />)}<span>高</span></div>
               {pageError && <button className="sync-error" type="button" onClick={() => void loadYear(year)} title={pageError}>读取失败 · 重试</button>}
             </div>
           </> : <ReportPanel key={`${year}-${currency}`} year={year} report={summary} currency={currency} loading={yearLoading} error={pageError} onRetry={() => void loadYear(year)} />}

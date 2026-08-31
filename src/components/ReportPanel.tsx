@@ -3,6 +3,8 @@ import {
   accrualAmountOf,
   amountOf,
   behaviorAmountOf,
+  behaviorDetailAvailable,
+  behaviorGrossAmountOf,
   formatDate,
   formatMoney,
   fromDateKey,
@@ -91,12 +93,23 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     const total = days.reduce((sum, day) => sum + amountOf(day, currency), 0)
     const gross = days.reduce((sum, day) => sum + amountOf(day, currency, 'gross'), 0)
     const refunds = days.reduce((sum, day) => sum + amountOf(day, currency, 'refunds'), 0)
-    const behaviorTotal = days.reduce((sum, day) => sum + behaviorAmountOf(day, currency), 0)
+    const behaviorNetTotal = days.reduce((sum, day) => sum + behaviorAmountOf(day, currency), 0)
+    const behaviorGrossTotal = days.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0)
+    const behaviorRefunds = days.reduce((sum, day) => sum + behaviorAmountOf(day, currency, 'refunds'), 0)
     const accrualTotal = days.reduce((sum, day) => sum + accrualAmountOf(day, currency), 0)
-    const spendDays = days.filter((day) => behaviorAmountOf(day, currency) > 0).length
+    const behaviorAvailable = days.every((day) => behaviorDetailAvailable(day, currency))
+    const spendDays = days.filter((day) => behaviorGrossAmountOf(day, currency) > 0).length
     const today = new Date()
     const visibleEnd = end < today ? end : today
     const elapsedDays = visibleEnd < start ? 0 : Math.floor((visibleEnd.getTime() - start.getTime()) / 86_400_000) + 1
+    const weekdayOccurrences = Array<number>(7).fill(0)
+    if (visibleEnd >= start) {
+      const cursor = new Date(start)
+      while (cursor <= visibleEnd) {
+        weekdayOccurrences[cursor.getDay()] += 1
+        cursor.setDate(cursor.getDate() + 1)
+      }
+    }
     const categories = new Map<string, ExpenseCategory & { value: number; grossValue: number; refundValue: number }>()
     for (const day of days) {
       for (const category of day.categories.filter((item) => item.currency === currency)) {
@@ -123,23 +136,29 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     const categoryTotal = categoryRows.reduce((sum, row) => sum + row.value, 0)
     const weekdayTotals = weekdayCopy.map((name, weekday) => {
       const matchingDays = days.filter((day) => fromDateKey(day.date).getDay() === weekday)
+      const grossTotal = matchingDays.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0)
+      const occurrences = weekdayOccurrences[weekday]
       return {
         name,
-        total: matchingDays.reduce((sum, day) => sum + behaviorAmountOf(day, currency), 0),
-        spendDays: matchingDays.filter((day) => behaviorAmountOf(day, currency) > 0).length,
-        days: matchingDays.length,
+        grossTotal,
+        average: occurrences === 0 ? 0 : grossTotal / occurrences,
+        spendDays: matchingDays.filter((day) => behaviorGrossAmountOf(day, currency) > 0).length,
+        days: occurrences,
       }
     })
-    const weekdayMax = Math.max(...weekdayTotals.map((row) => row.total), 0)
+    const weekdayMax = Math.max(...weekdayTotals.map((row) => row.average), 0)
     const peakDay = days.reduce<{ date: string; value: number } | null>((peak, day) => {
-      const value = behaviorAmountOf(day, currency)
+      const value = behaviorGrossAmountOf(day, currency)
       return !peak || value > peak.value ? { date: day.date, value } : peak
     }, null)
-    const annualHighThreshold = quantileThresholds(report?.days ?? [], currency, behaviorAmountOf)[3] ?? 0
-    const highDays = days.filter((day) => behaviorAmountOf(day, currency) > annualHighThreshold && annualHighThreshold > 0).length
+    const annualHighThreshold = quantileThresholds(report?.days ?? [], currency, behaviorGrossAmountOf)[3] ?? 0
+    const highDays = days.filter((day) => behaviorGrossAmountOf(day, currency) > annualHighThreshold && annualHighThreshold > 0).length
     return {
       total,
-      behaviorTotal,
+      behaviorNetTotal,
+      behaviorGrossTotal,
+      behaviorRefunds,
+      behaviorAvailable,
       accrualTotal,
       gross,
       refunds,
@@ -176,7 +195,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     if (selectedWeekday === null) return []
     return analysis.days.flatMap((day) => day.transactions.flatMap((transaction) => {
       if (isAccrualTransaction(transaction)) return []
-      const value = transactionAmountOf(transaction, currency)
+      const value = transactionAmountOf(transaction, currency, 'gross')
       return value === 0 ? [] : [{ day: day.date, transaction, value }]
     })).filter(({ day }) => fromDateKey(day).getDay() === selectedWeekday)
       .sort((a, b) => b.day.localeCompare(a.day))
@@ -209,21 +228,21 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
           <div className="metric-grid" aria-label="周期摘要">
             <article><span>期间成本</span><strong>{formatMoney(analysis.total, currency)}</strong><small>{analysis.refunds > 0 ? `已抵扣退款 ${formatMoney(analysis.refunds, currency)}` : `总支出 ${formatMoney(analysis.gross, currency)}`}</small></article>
             <article><span>期间日均</span><strong>{formatMoney(analysis.dailyAverage, currency)}</strong><small>按已过去的自然日计算</small></article>
-            <article><span>单日峰值</span><strong>{formatMoney(analysis.peakDay?.value ?? 0, currency)}</strong><small>{analysis.peakDay ? `${Number(analysis.peakDay.date.slice(5, 7))} 月 ${Number(analysis.peakDay.date.slice(8, 10))} 日` : '这一周期暂无支出'}</small></article>
+            <article><span>行为峰值</span><strong>{formatMoney(analysis.peakDay?.value ?? 0, currency)}</strong><small>{analysis.peakDay ? `${Number(analysis.peakDay.date.slice(5, 7))} 月 ${Number(analysis.peakDay.date.slice(8, 10))} 日` : '这一周期暂无支出'}</small></article>
           </div>
-          <p className="report-scope-note">行为支出 {formatMoney(analysis.behaviorTotal, currency)} · 期间成本包含 {formatMoney(analysis.accrualTotal, currency)} 非现金摊销/计提</p>
+          <p className="report-scope-note">{analysis.behaviorAvailable ? <>行为毛支出 {formatMoney(analysis.behaviorGrossTotal, currency)} · 退款 {formatMoney(analysis.behaviorRefunds, currency)} · 行为净支出 {formatMoney(analysis.behaviorNetTotal, currency)} · 非现金摊销/计提 {formatMoney(analysis.accrualTotal, currency)}</> : <>缺少交易明细，行为支出口径暂不可用；期间成本仍按原始汇总展示</>}</p>
           <section className="weekday-report" aria-labelledby="weekday-report-title">
             <div className="report-section-heading">
-              <div><div id="weekday-report-title" className="report-section-label">星期几更容易花钱</div><small>按当前周期每天的净支出汇总</small></div>
-              <span>{analysis.weekdayTotals.reduce((best, row) => row.total > best.total ? row : best, analysis.weekdayTotals[0]).name}最高</span>
+              <div><div id="weekday-report-title" className="report-section-label">星期几更容易花钱</div><small>平均行为毛支出 · 同时显示消费频率</small></div>
+              <span>{analysis.weekdayTotals.reduce((best, row) => row.average > best.average ? row : best, analysis.weekdayTotals[0]).name}最高</span>
             </div>
             <div className="weekday-bars">
               {analysis.weekdayTotals.map((row, weekday) => (
-                <button className="weekday-row" type="button" key={row.name} data-top={row.total === analysis.weekdayMax && row.total > 0 || undefined} onClick={() => setSelectedWeekday(weekday)} aria-haspopup="dialog">
+                <button className="weekday-row" type="button" key={row.name} data-top={row.average === analysis.weekdayMax && row.average > 0 || undefined} onClick={() => setSelectedWeekday(weekday)} aria-haspopup="dialog">
                   <span className="weekday-name">{row.name}</span>
-                  <div className="weekday-track"><i style={{ width: `${analysis.weekdayMax <= 0 ? 0 : row.total / analysis.weekdayMax * 100}%` }} /></div>
-                  <span className="weekday-value">{formatMoney(row.total, currency)}</span>
-                  <small>{row.spendDays}/{row.days} 天有支出</small>
+                  <div className="weekday-track"><i style={{ width: `${analysis.weekdayMax <= 0 ? 0 : row.average / analysis.weekdayMax * 100}%` }} /></div>
+                  <span className="weekday-value">{formatMoney(row.average, currency)}</span>
+                  <small>{row.spendDays}/{row.days} 天 · {row.days === 0 ? 0 : Math.round(row.spendDays / row.days * 100)}%</small>
                 </button>
               ))}
             </div>
@@ -247,7 +266,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
         </>
       ) : <div className="report-empty">这一周期没有 {currency} 支出</div>}
 
-      <footer className="report-footnote">退款已抵扣，转账与信用卡还款不计入支出<span aria-hidden="true">·</span>{analysis.highDays} 个高于年度日常区间的支出日</footer>
+      <footer className="report-footnote">星期与峰值按行为毛支出，排除摊销/计提；期间成本保留全部费用<span aria-hidden="true">·</span>{analysis.highDays} 个高于年度日常区间的支出日</footer>
 
       {selectedCategory && (
         <DrawerShell labelledBy="report-drawer-title" closeLabel="关闭分类明细" onClosed={() => setSelectedAccount(null)}>
@@ -279,7 +298,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             <div className="page-heading report-detail-heading">
               <span className="eyebrow">{rangeLabel(period, start, end)}</span>
               <h2 id="weekday-drawer-title">{weekdayCopy[selectedWeekday]}消费明细</h2>
-              <div className="page-meta"><strong>{formatMoney(selectedWeekdayTotal, currency)}</strong><span>{selectedWeekdayTransactions.length} 笔交易</span></div>
+              <div className="page-meta"><strong>行为毛支出 {formatMoney(selectedWeekdayTotal, currency)}</strong><span>{selectedWeekdayTransactions.length} 笔交易</span></div>
             </div>
             <section aria-labelledby="weekday-transaction-title">
               <div className="drawer-section-heading"><h3 id="weekday-transaction-title">具体明细</h3><span>按日期倒序</span></div>
