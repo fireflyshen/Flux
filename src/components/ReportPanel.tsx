@@ -105,12 +105,33 @@ function behaviorCategories(days: DaySpend[], currency: string) {
   return rows
 }
 
+function trendPoint(index: number, count: number, value: number | null, max: number) {
+  const x = count <= 1 ? 50 : 2 + index / (count - 1) * 96
+  const y = value === null || max <= 0 ? 30 : 30 - Math.max(0, value) / max * 26
+  return { x, y }
+}
+
+function trendPath(values: (number | null)[], max: number) {
+  let drawing = false
+  return values.map((value, index) => {
+    if (value === null) {
+      drawing = false
+      return ''
+    }
+    const { x, y } = trendPoint(index, values.length, value, max)
+    const command = drawing ? 'L' : 'M'
+    drawing = true
+    return `${command}${x.toFixed(2)} ${y.toFixed(2)}`
+  }).filter(Boolean).join(' ')
+}
+
 export function ReportPanel({ year, report, currency, loading, error, onRetry }: ReportPanelProps) {
   const [period, setPeriod] = useState<Period>('month')
   const [anchor, setAnchor] = useState(() => yearAnchor(year))
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
   const [selectedAccountScope, setSelectedAccountScope] = useState<'behavior' | 'cost'>('cost')
   const [selectedWeekday, setSelectedWeekday] = useState<number | null>(null)
+  const [selectedTrendMonth, setSelectedTrendMonth] = useState<number | null>(null)
   const [openSection, setOpenSection] = useState<'weekday' | 'structure' | null>(null)
   const { start, end } = periodRange(period, anchor)
 
@@ -127,6 +148,21 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     const today = new Date()
     const visibleEnd = end < today ? end : today
     const elapsedDays = visibleEnd < start ? 0 : Math.floor((visibleEnd.getTime() - start.getTime()) / 86_400_000) + 1
+    const trendLastMonth = year < today.getFullYear() ? 11 : year === today.getFullYear() ? today.getMonth() : -1
+    const monthTrend = Array.from({ length: trendLastMonth + 1 }, (_, month) => {
+      const monthStart = new Date(year, month, 1, 12)
+      const monthEnd = new Date(year, month + 1, 0, 12)
+      const monthDays = daysInRange(reportDays, monthStart, monthEnd)
+      const behaviorAvailable = monthDays.every((day) => behaviorDetailAvailable(day, currency))
+      const periodCost = monthDays.reduce((sum, day) => sum + amountOf(day, currency), 0)
+      const behaviorNet = behaviorAvailable
+        ? monthDays.reduce((sum, day) => sum + behaviorAmountOf(day, currency), 0)
+        : null
+      const incomplete = year === today.getFullYear() && month === today.getMonth()
+      const hasActivity = monthDays.some((day) => amountOf(day, currency, 'gross') !== 0 || amountOf(day, currency, 'refunds') !== 0)
+      return { month, label: `${month + 1}月`, behaviorNet, periodCost, incomplete, hasActivity }
+    }).filter((row) => !row.incomplete || row.hasActivity)
+    const trendMax = Math.max(...monthTrend.flatMap((row) => [row.behaviorNet ?? 0, row.periodCost]), 0)
     const weekdayOccurrences = Array<number>(7).fill(0)
     if (visibleEnd >= start) {
       const cursor = new Date(start)
@@ -244,6 +280,8 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       categoryTotal,
       weekdayTotals,
       weekdayMax,
+      monthTrend,
+      trendMax,
       comparisonMonths: comparisonMonths.length,
       baselineAverage,
       difference,
@@ -274,6 +312,16 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       : `支出日均额 ${analysis.spendDayAmountRate > 0 ? '+' : '−'}${Math.round(Math.abs(analysis.spendDayAmountRate) * 100)}%`
   const topWeekday = analysis.weekdayTotals.reduce((best, row) => row.average > best.average ? row : best, analysis.weekdayTotals[0])
   const topCategory = analysis.visibleCategories[0]
+  const activeTrendMonth = analysis.monthTrend.find((row) => row.month === selectedTrendMonth)
+    ?? analysis.monthTrend.at(-1)
+    ?? null
+  const activeTrendIndex = activeTrendMonth ? analysis.monthTrend.findIndex((row) => row.month === activeTrendMonth.month) : -1
+  const activeBehaviorPoint = activeTrendMonth
+    ? trendPoint(activeTrendIndex, analysis.monthTrend.length, activeTrendMonth.behaviorNet, analysis.trendMax)
+    : null
+  const activeCostPoint = activeTrendMonth
+    ? trendPoint(activeTrendIndex, analysis.monthTrend.length, activeTrendMonth.periodCost, analysis.trendMax)
+    : null
 
   const selectedCategory = selectedAccountScope === 'behavior'
     ? analysis.drivers.find((row) => row.account === selectedAccount) ?? null
@@ -305,6 +353,38 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const selectedWeekdayTotal = selectedWeekdayTransactions.reduce((sum, row) => sum + row.value, 0)
 
   const canShift = (amount: number) => period !== 'year' && shiftAnchor(anchor, period, amount).getFullYear() === year
+  const trendSection = analysis.monthTrend.length > 1 && activeTrendMonth && activeBehaviorPoint && activeCostPoint ? (
+    <section className="trend-section" aria-labelledby="trend-title">
+      <div className="trend-heading">
+        <div><span id="trend-title">年度走势</span><small>{year} · 按月</small></div>
+        <div className="trend-legend" aria-label="趋势图图例"><span><i data-series="behavior" />行为净支出</span><span><i data-series="cost" />期间成本</span></div>
+      </div>
+      <div className="trend-reading" aria-live="polite">
+        <strong>{activeTrendMonth.label}</strong>
+        <span>行为 {activeTrendMonth.behaviorNet === null ? '—' : formatMoney(activeTrendMonth.behaviorNet, currency)}</span>
+        <span>成本 {formatMoney(activeTrendMonth.periodCost, currency)}</span>
+        {activeTrendMonth.incomplete && <em>进行中</em>}
+      </div>
+      <div className="trend-chart">
+        <div className="trend-plot">
+          <svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+            <path className="trend-baseline" d="M2 30 H98" />
+            <path className="trend-line" data-series="cost" d={trendPath(analysis.monthTrend.map((row) => row.periodCost), analysis.trendMax)} />
+            <path className="trend-line" data-series="behavior" d={trendPath(analysis.monthTrend.map((row) => row.behaviorNet), analysis.trendMax)} />
+          </svg>
+          <i className="trend-cursor" style={{ left: `${activeBehaviorPoint.x}%` }} aria-hidden="true" />
+          {activeTrendMonth.behaviorNet !== null && <i className="trend-dot" data-series="behavior" data-incomplete={activeTrendMonth.incomplete || undefined} style={{ left: `${activeBehaviorPoint.x}%`, top: `${activeBehaviorPoint.y / 32 * 100}%` }} aria-hidden="true" />}
+          <i className="trend-dot" data-series="cost" data-incomplete={activeTrendMonth.incomplete || undefined} style={{ left: `${activeCostPoint.x}%`, top: `${activeCostPoint.y / 32 * 100}%` }} aria-hidden="true" />
+        </div>
+        <div className="trend-months" style={{ gridTemplateColumns: `repeat(${analysis.monthTrend.length}, minmax(0, 1fr))` }}>
+          {analysis.monthTrend.map((row) => (
+            <button type="button" key={row.month} data-active={row.month === activeTrendMonth.month || undefined} onClick={() => setSelectedTrendMonth(row.month)} aria-label={`查看 ${row.label}趋势数据`}>{row.month + 1}</button>
+          ))}
+        </div>
+      </div>
+    </section>
+  ) : null
+
   return (
     <section className="report-panel" aria-label={`${year} 年支出洞察`} data-loading={loading || undefined}>
       <div className="report-toolbar">
@@ -357,6 +437,8 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             </section>
           )}
 
+          {trendSection}
+
           <div className="report-disclosures">
             <section>
               <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'weekday'} onClick={() => setOpenSection((current) => current === 'weekday' ? null : 'weekday')}>
@@ -400,7 +482,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             </section>
           </div>
         </>
-      ) : <div className="report-empty">这一周期没有 {currency} 支出</div>}
+      ) : <><div className="report-empty" data-compact>这一周期尚无 {currency} 支出</div>{trendSection}</>}
 
       <footer className="report-footnote">行为口径排除摊销与计提 · 期间成本保留全部费用</footer>
 
