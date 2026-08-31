@@ -11,6 +11,7 @@ import {
   isAccrualTransaction,
   quantileThresholds,
   transactionAmountOf,
+  type DaySpend,
   type ExpenseCategory,
   type YearSpend,
 } from '../domain'
@@ -78,6 +79,27 @@ function Arrow({ direction }: { direction: 'left' | 'right' }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={direction === 'left' ? 'm15 18-6-6 6-6' : 'm9 6 6 6-6 6'} /></svg>
 }
 
+function daysInRange(days: DaySpend[], start: Date, end: Date) {
+  return days.filter((day) => {
+    const date = fromDateKey(day.date)
+    return date >= start && date <= end
+  })
+}
+
+function behaviorCategories(days: DaySpend[], currency: string) {
+  const rows = new Map<string, { account: string; name: string; value: number }>()
+  for (const day of days) {
+    for (const transaction of day.transactions.filter((item) => !isAccrualTransaction(item))) {
+      for (const category of transaction.categories.filter((item) => item.currency === currency)) {
+        const row = rows.get(category.account) ?? { account: category.account, name: category.name, value: 0 }
+        row.value += Number(category.gross)
+        rows.set(category.account, row)
+      }
+    }
+  }
+  return rows
+}
+
 export function ReportPanel({ year, report, currency, loading, error, onRetry }: ReportPanelProps) {
   const [period, setPeriod] = useState<Period>('month')
   const [anchor, setAnchor] = useState(() => yearAnchor(year))
@@ -86,16 +108,13 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const { start, end } = periodRange(period, anchor)
 
   const analysis = useMemo(() => {
-    const days = (report?.days ?? []).filter((day) => {
-      const date = fromDateKey(day.date)
-      return date >= start && date <= end
-    })
+    const reportDays = report?.days ?? []
+    const days = daysInRange(reportDays, start, end)
     const total = days.reduce((sum, day) => sum + amountOf(day, currency), 0)
     const gross = days.reduce((sum, day) => sum + amountOf(day, currency, 'gross'), 0)
     const refunds = days.reduce((sum, day) => sum + amountOf(day, currency, 'refunds'), 0)
     const behaviorNetTotal = days.reduce((sum, day) => sum + behaviorAmountOf(day, currency), 0)
     const behaviorGrossTotal = days.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0)
-    const behaviorRefunds = days.reduce((sum, day) => sum + behaviorAmountOf(day, currency, 'refunds'), 0)
     const accrualTotal = days.reduce((sum, day) => sum + accrualAmountOf(day, currency), 0)
     const behaviorAvailable = days.every((day) => behaviorDetailAvailable(day, currency))
     const spendDays = days.filter((day) => behaviorGrossAmountOf(day, currency) > 0).length
@@ -153,18 +172,54 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     }, null)
     const annualHighThreshold = quantileThresholds(report?.days ?? [], currency, behaviorGrossAmountOf)[3] ?? 0
     const highDays = days.filter((day) => behaviorGrossAmountOf(day, currency) > annualHighThreshold && annualHighThreshold > 0).length
+
+    const comparisonMonths: { days: DaySpend[]; total: number }[] = []
+    if (period === 'month' && elapsedDays > 0) {
+      for (let offset = 1; offset <= 3; offset += 1) {
+        const baselineStart = new Date(start.getFullYear(), start.getMonth() - offset, 1, 12)
+        if (baselineStart.getFullYear() !== year) continue
+        const baselineLastDay = new Date(baselineStart.getFullYear(), baselineStart.getMonth() + 1, 0, 12).getDate()
+        const baselineEnd = new Date(baselineStart.getFullYear(), baselineStart.getMonth(), Math.min(elapsedDays, baselineLastDay), 12)
+        const baselineDays = daysInRange(reportDays, baselineStart, baselineEnd)
+        if (!baselineDays.every((day) => behaviorDetailAvailable(day, currency))) continue
+        comparisonMonths.push({ days: baselineDays, total: baselineDays.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0) })
+      }
+    }
+
+    const baselineAverage = comparisonMonths.length === 0 ? null : comparisonMonths.reduce((sum, month) => sum + month.total, 0) / comparisonMonths.length
+    const difference = baselineAverage === null ? null : behaviorGrossTotal - baselineAverage
+    const differenceRate = baselineAverage && difference !== null ? difference / baselineAverage : null
+    const currentBehaviorCategories = behaviorCategories(days, currency)
+    const baselineCategoryTotals = new Map<string, { name: string; value: number }>()
+    for (const month of comparisonMonths) {
+      for (const row of behaviorCategories(month.days, currency).values()) {
+        const totalRow = baselineCategoryTotals.get(row.account) ?? { name: row.name, value: 0 }
+        totalRow.value += row.value
+        baselineCategoryTotals.set(row.account, totalRow)
+      }
+    }
+    const driverAccounts = new Set([...currentBehaviorCategories.keys(), ...baselineCategoryTotals.keys()])
+    const drivers = [...driverAccounts].map((account) => {
+      const current = currentBehaviorCategories.get(account)
+      const baseline = baselineCategoryTotals.get(account)
+      return {
+        account,
+        name: current?.name ?? baseline?.name ?? account,
+        difference: (current?.value ?? 0) - (baseline?.value ?? 0) / Math.max(1, comparisonMonths.length),
+      }
+    }).filter((row) => Math.abs(row.difference) >= .01)
+      .sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference))
+      .slice(0, 2)
     return {
       total,
       behaviorNetTotal,
       behaviorGrossTotal,
-      behaviorRefunds,
       behaviorAvailable,
       accrualTotal,
       gross,
       refunds,
       spendDays,
       noSpendDays: Math.max(0, elapsedDays - spendDays),
-      dailyAverage: elapsedDays === 0 ? 0 : total / elapsedDays,
       days,
       categoryRows,
       visibleCategories,
@@ -174,8 +229,23 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       weekdayMax,
       peakDay,
       highDays,
+      comparisonMonths: comparisonMonths.length,
+      baselineAverage,
+      difference,
+      differenceRate,
+      drivers,
     }
-  }, [currency, end, report, start])
+  }, [currency, end, period, report, start, year])
+
+  const comparisonHeadline = !analysis.behaviorAvailable
+    ? '行为口径暂不可用'
+    : period !== 'month' || analysis.comparisonMonths === 0
+      ? formatMoney(analysis.behaviorGrossTotal, currency)
+      : analysis.baselineAverage === 0
+        ? analysis.behaviorGrossTotal > 0 ? '本期出现新增支出' : '本期保持零支出'
+        : analysis.differenceRate !== null && Math.abs(analysis.differenceRate) < .02
+          ? `与近 ${analysis.comparisonMonths} 个月同期基本持平`
+          : `比近 ${analysis.comparisonMonths} 个月同期${(analysis.difference ?? 0) > 0 ? '高' : '低'} ${Math.round(Math.abs(analysis.differenceRate ?? 0) * 100)}%`
 
   const selectedCategory = analysis.visibleCategories.find((row) => row.account === selectedAccount) ?? null
   const selectedTransactions = useMemo(() => {
@@ -225,12 +295,21 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
         <div className="report-empty"><button type="button" onClick={onRetry} title={error}>账本读取失败 · 重试</button></div>
       ) : analysis.categoryRows.length > 0 ? (
         <>
+          <section className="behavior-overview" aria-labelledby="behavior-overview-title">
+            <span id="behavior-overview-title">消费节奏</span>
+            <strong>{comparisonHeadline}</strong>
+            <small>{analysis.behaviorAvailable ? `行为毛支出 ${formatMoney(analysis.behaviorGrossTotal, currency)} · ${analysis.spendDays} 个支出日 · 净支出 ${formatMoney(analysis.behaviorNetTotal, currency)}` : '当前快照缺少交易明细，未使用期间成本代替行为数据'}</small>
+            {analysis.drivers.length > 0 && analysis.comparisonMonths > 0 && (
+              <div className="behavior-drivers" aria-label="主要变化来源">
+                {analysis.drivers.map((driver) => <span key={driver.account}>{driver.name}<b>{driver.difference > 0 ? '+' : ''}{formatMoney(driver.difference, currency)}</b></span>)}
+              </div>
+            )}
+          </section>
           <div className="metric-grid" aria-label="周期摘要">
             <article><span>期间成本</span><strong>{formatMoney(analysis.total, currency)}</strong><small>{analysis.refunds > 0 ? `已抵扣退款 ${formatMoney(analysis.refunds, currency)}` : `总支出 ${formatMoney(analysis.gross, currency)}`}</small></article>
-            <article><span>期间日均</span><strong>{formatMoney(analysis.dailyAverage, currency)}</strong><small>按已过去的自然日计算</small></article>
+            <article><span>非现金成本</span><strong>{formatMoney(analysis.accrualTotal, currency)}</strong><small>摊销与计提</small></article>
             <article><span>行为峰值</span><strong>{formatMoney(analysis.peakDay?.value ?? 0, currency)}</strong><small>{analysis.peakDay ? `${Number(analysis.peakDay.date.slice(5, 7))} 月 ${Number(analysis.peakDay.date.slice(8, 10))} 日` : '这一周期暂无支出'}</small></article>
           </div>
-          <p className="report-scope-note">{analysis.behaviorAvailable ? <>行为毛支出 {formatMoney(analysis.behaviorGrossTotal, currency)} · 退款 {formatMoney(analysis.behaviorRefunds, currency)} · 行为净支出 {formatMoney(analysis.behaviorNetTotal, currency)} · 非现金摊销/计提 {formatMoney(analysis.accrualTotal, currency)}</> : <>缺少交易明细，行为支出口径暂不可用；期间成本仍按原始汇总展示</>}</p>
           <section className="weekday-report" aria-labelledby="weekday-report-title">
             <div className="report-section-heading">
               <div><div id="weekday-report-title" className="report-section-label">星期几更容易花钱</div><small>平均行为毛支出 · 同时显示消费频率</small></div>
@@ -248,7 +327,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             </div>
           </section>
           <div className="report-section-heading">
-            <div><div className="report-section-label">支出结构</div><small>{analysis.spendDays} 个支出日 · {analysis.noSpendDays} 个无支出日</small></div>
+            <div><div className="report-section-label">期间成本结构</div><small>{analysis.spendDays} 个支出日 · {analysis.noSpendDays} 个无支出日</small></div>
             <span>前五类 + Others</span>
           </div>
           <div className="composition-bar" aria-label="分类支出占比">

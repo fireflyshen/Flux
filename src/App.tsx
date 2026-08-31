@@ -151,11 +151,6 @@ function App() {
   return (
     <div className="app-shell">
       <main className="heatmap-page">
-        <div className="page-utilities">
-          <button className="theme-button" type="button" data-theme={theme} onClick={toggleTheme} aria-label={`切换到${theme === 'dark' ? '浅色' : '深色'}主题`} title={`切换到${theme === 'dark' ? '浅色' : '深色'}主题`}>
-            {theme === 'light' ? <MoonIcon /> : <SunIcon />}
-          </button>
-        </div>
         <section className="practice-panel" aria-label={panelLabel}>
           <div className="panel-heading">
             <div className="year-heading">
@@ -171,6 +166,9 @@ function App() {
                 <button type="button" data-active={view === 'heatmap' || undefined} aria-pressed={view === 'heatmap'} onClick={() => setView('heatmap')} aria-label="热力图" title="热力图"><GridIcon /></button>
                 <button type="button" data-active={view === 'report' || undefined} aria-pressed={view === 'report'} onClick={() => setView('report')} aria-label="支出洞察" title="支出洞察"><ReportIcon /></button>
               </div>
+              <button className="theme-button" type="button" data-theme={theme} onClick={toggleTheme} aria-label={`切换到${theme === 'dark' ? '浅色' : '深色'}主题`} title={`切换到${theme === 'dark' ? '浅色' : '深色'}主题`}>
+                {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+              </button>
             </div>
           </div>
 
