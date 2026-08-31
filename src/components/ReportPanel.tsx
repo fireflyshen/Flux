@@ -86,13 +86,19 @@ function daysInRange(days: DaySpend[], start: Date, end: Date) {
 }
 
 function behaviorCategories(days: DaySpend[], currency: string) {
-  const rows = new Map<string, { account: string; name: string; value: number }>()
+  const rows = new Map<string, { account: string; name: string; value: number; transactionCount: number }>()
   for (const day of days) {
     for (const transaction of day.transactions.filter((item) => !isAccrualTransaction(item))) {
+      const transactionAccounts = new Set<string>()
       for (const category of transaction.categories.filter((item) => item.currency === currency)) {
-        const row = rows.get(category.account) ?? { account: category.account, name: category.name, value: 0 }
+        const row = rows.get(category.account) ?? { account: category.account, name: category.name, value: 0, transactionCount: 0 }
         row.value += Number(category.gross)
         rows.set(category.account, row)
+        if (Number(category.gross) !== 0) transactionAccounts.add(category.account)
+      }
+      for (const account of transactionAccounts) {
+        const row = rows.get(account)
+        if (row) row.transactionCount += 1
       }
     }
   }
@@ -103,6 +109,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const [period, setPeriod] = useState<Period>('month')
   const [anchor, setAnchor] = useState(() => yearAnchor(year))
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
+  const [selectedAccountScope, setSelectedAccountScope] = useState<'behavior' | 'cost'>('cost')
   const [selectedWeekday, setSelectedWeekday] = useState<number | null>(null)
   const [openSection, setOpenSection] = useState<'weekday' | 'structure' | null>(null)
   const { start, end } = periodRange(period, anchor)
@@ -215,6 +222,8 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       return {
         account,
         name: current?.name ?? baseline?.name ?? account,
+        currentValue: current?.value ?? 0,
+        transactionCount: current?.transactionCount ?? 0,
         difference: (current?.value ?? 0) - (baseline?.value ?? 0) / Math.max(1, comparisonMonths.length),
       }
     }).filter((row) => Math.abs(row.difference) >= .01)
@@ -266,19 +275,22 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const topWeekday = analysis.weekdayTotals.reduce((best, row) => row.average > best.average ? row : best, analysis.weekdayTotals[0])
   const topCategory = analysis.visibleCategories[0]
 
-  const selectedCategory = analysis.visibleCategories.find((row) => row.account === selectedAccount) ?? null
+  const selectedCategory = selectedAccountScope === 'behavior'
+    ? analysis.drivers.find((row) => row.account === selectedAccount) ?? null
+    : analysis.visibleCategories.find((row) => row.account === selectedAccount) ?? null
   const selectedTransactions = useMemo(() => {
     if (!selectedAccount) return []
     const selectedAccounts = new Set(selectedAccount === '__others__'
       ? analysis.hiddenCategories.map((category) => category.account)
       : [selectedAccount])
     return analysis.days.flatMap((day) => day.transactions.flatMap((transaction) => {
+      if (selectedAccountScope === 'behavior' && isAccrualTransaction(transaction)) return []
       const value = transaction.categories
         .filter((category) => selectedAccounts.has(category.account) && category.currency === currency)
-        .reduce((sum, category) => sum + Number(category.net), 0)
+        .reduce((sum, category) => sum + Number(selectedAccountScope === 'behavior' ? category.gross : category.net), 0)
       return value === 0 ? [] : [{ day: day.date, transaction, value }]
     })).sort((a, b) => b.day.localeCompare(a.day))
-  }, [analysis.days, analysis.hiddenCategories, currency, selectedAccount])
+  }, [analysis.days, analysis.hiddenCategories, currency, selectedAccount, selectedAccountScope])
 
   const selectedWeekdayTransactions = useMemo(() => {
     if (selectedWeekday === null) return []
@@ -317,12 +329,14 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
           <section className="report-balance" aria-label="周期核心数据">
             <article>
               <div><span>行为支出</span><small>{analysis.behaviorAvailable ? `${analysis.spendDays} 个支出日 · 净支出 ${formatMoney(analysis.behaviorNetTotal, currency)}` : '缺少交易明细，未使用期间成本代替'}</small></div>
-              <strong>{analysis.behaviorAvailable ? formatMoney(analysis.behaviorGrossTotal, currency) : '—'}</strong>
-              {comparisonCopy && <em data-tone={comparisonTone}>{comparisonCopy}</em>}
+              <div className="report-figure">
+                <strong>{analysis.behaviorAvailable ? formatMoney(analysis.behaviorGrossTotal, currency) : '—'}</strong>
+                {comparisonCopy && <em data-tone={comparisonTone}>{comparisonCopy}</em>}
+              </div>
             </article>
             <article>
               <div><span>期间成本</span><small>含非现金成本 {formatMoney(analysis.accrualTotal, currency)}{analysis.refunds > 0 ? ` · 退款 ${formatMoney(analysis.refunds, currency)}` : ''}</small></div>
-              <strong>{formatMoney(analysis.total, currency)}</strong>
+              <div className="report-figure"><strong>{formatMoney(analysis.total, currency)}</strong></div>
             </article>
           </section>
 
@@ -332,7 +346,12 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
               {(spendDaysCopy || spendDayAmountCopy) && <p className="change-factors">{[spendDaysCopy, spendDayAmountCopy].filter(Boolean).join(' · ')}</p>}
               {analysis.drivers.length > 0 && (
                 <div className="change-list">
-                  {analysis.drivers.map((driver) => <div key={driver.account}><span>{driver.name}</span><strong data-tone={driver.difference > 0 ? 'up' : 'down'}>{driver.difference > 0 ? '+' : ''}{formatMoney(driver.difference, currency)}</strong></div>)}
+                  {analysis.drivers.map((driver) => (
+                    <button type="button" key={driver.account} onClick={() => { setSelectedAccountScope('behavior'); setSelectedAccount(driver.account) }} aria-haspopup="dialog">
+                      <span><strong>{driver.name}</strong><small>{driver.transactionCount > 0 ? `本期 ${formatMoney(driver.currentValue, currency)} · ${driver.transactionCount} 笔` : '本期无支出'}</small></span>
+                      <em data-tone={driver.difference > 0 ? 'up' : 'down'}>{driver.difference > 0 ? '+' : ''}{formatMoney(driver.difference, currency)}</em>
+                    </button>
+                  ))}
                 </div>
               )}
             </section>
@@ -369,7 +388,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
                   </div>
                   <div className="category-summary-grid">
                     {analysis.visibleCategories.map((row, index) => (
-                      <button className="category-summary" type="button" key={row.account} onClick={() => setSelectedAccount(row.account)} aria-haspopup="dialog">
+                      <button className="category-summary" type="button" key={row.account} onClick={() => { setSelectedAccountScope('cost'); setSelectedAccount(row.account) }} aria-haspopup="dialog">
                         <i data-tone={index} aria-hidden="true" />
                         <div><strong>{row.name}</strong><small>{formatMoney(row.value, currency)}</small></div>
                         <span>{analysis.categoryTotal <= 0 ? '0%' : `${Math.round(row.value / analysis.categoryTotal * 100)}%`}</span>
@@ -391,7 +410,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             <div className="page-heading report-detail-heading">
               <span className="eyebrow">{rangeLabel(period, start, end)}</span>
               <h2 id="report-drawer-title">{selectedCategory.name}</h2>
-              <div className="page-meta"><strong>{formatMoney(selectedCategory.value, currency)}</strong><span>{selectedTransactions.length} 笔交易</span></div>
+              <div className="page-meta"><strong>{formatMoney('currentValue' in selectedCategory ? selectedCategory.currentValue : selectedCategory.value, currency)}</strong><span>{selectedTransactions.length} 笔交易</span></div>
             </div>
             <section aria-labelledby="report-transaction-title">
               <div className="drawer-section-heading"><h3 id="report-transaction-title">具体明细</h3><span>按日期倒序</span></div>

@@ -246,14 +246,15 @@
 .heatmap-insight { color: var(--text-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
 
 .report-balance { border-top: 1px solid color-mix(in srgb, var(--border) 56%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--border) 56%, transparent); }
-.report-balance article { min-height: 68px; padding: 13px 2px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px; }
+.report-balance article { min-height: 68px; padding: 13px 2px; display: grid; grid-template-columns: minmax(0, 1fr) 166px; align-items: center; gap: 14px; }
 .report-balance article + article { border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent); }
 .report-balance article > div { min-width: 0; }
 .report-balance span, .report-balance small { display: block; }
 .report-balance span { color: var(--text-soft); font-size: 11px; font-weight: 570; }
 .report-balance small { margin-top: 4px; overflow: hidden; color: var(--text-faint); font-size: 8px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
-.report-balance article > strong { color: var(--text); font-size: 19px; font-weight: 620; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
-.report-balance em { min-width: 43px; color: var(--text-soft); font-size: 10px; font-style: normal; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.report-balance .report-figure { display: grid; grid-template-columns: minmax(0, 1fr) 43px; align-items: baseline; gap: 12px; }
+.report-figure > strong { color: var(--text); font-size: 19px; font-weight: 620; letter-spacing: -.025em; text-align: right; font-variant-numeric: tabular-nums; }
+.report-balance em { color: var(--text-soft); font-size: 10px; font-style: normal; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .report-balance em[data-tone='down'] { color: var(--accent-deep); }
 
 .change-summary { margin: 31px 0 30px; }
@@ -262,10 +263,15 @@
 .quiet-heading small { color: var(--text-faint); font-size: 8px; }
 .change-factors { margin: 6px 0 5px; color: var(--text-soft); font-size: 10px; line-height: 1.6; font-variant-numeric: tabular-nums; }
 .change-list { margin-top: 4px; }
-.change-list > div { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid color-mix(in srgb, var(--border) 42%, transparent); }
-.change-list span { overflow: hidden; color: var(--text-soft); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.change-list strong { flex: 0 0 auto; color: var(--text-soft); font-size: 10px; font-weight: 590; font-variant-numeric: tabular-nums; }
-.change-list strong[data-tone='down'] { color: var(--accent-deep); }
+.change-list > button { width: 100%; min-height: 44px; padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 18px; color: inherit; text-align: left; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 42%, transparent); background: transparent; cursor: pointer; }
+.change-list > button:hover { background: color-mix(in srgb, var(--surface-muted) 55%, transparent); }
+.change-list > button:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 52%, transparent); outline-offset: 2px; border-radius: 5px; }
+.change-list > button > span { min-width: 0; }
+.change-list strong, .change-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.change-list strong { color: var(--text-soft); font-size: 10px; font-weight: 570; }
+.change-list small { margin-top: 3px; color: var(--text-faint); font-size: 8px; font-variant-numeric: tabular-nums; }
+.change-list em { flex: 0 0 auto; color: var(--text-soft); font-size: 10px; font-style: normal; font-weight: 590; font-variant-numeric: tabular-nums; }
+.change-list em[data-tone='down'] { color: var(--accent-deep); }
 
 .report-disclosures { border-top: 1px solid color-mix(in srgb, var(--border) 56%, transparent); }
 .disclosure-trigger { width: 100%; min-height: 64px; padding: 11px 2px; display: flex; align-items: center; justify-content: space-between; gap: 20px; color: inherit; text-align: left; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 56%, transparent); background: transparent; cursor: pointer; }
@@ -585,7 +591,9 @@
   .heatmap-insight { max-width: 48%; line-height: 1.4; }
   .report-panel { min-height: 60vh; padding: 0 2px 40px; }
   .report-balance article { min-height: 72px; gap: 10px; }
-  .report-balance article > strong { font-size: 17px; }
+  .report-balance article { grid-template-columns: minmax(0, 1fr) 148px; }
+  .report-balance .report-figure { grid-template-columns: minmax(0, 1fr) 38px; gap: 8px; }
+  .report-figure > strong { font-size: 17px; }
   .report-balance small { max-width: 48vw; }
   .change-summary { margin: 27px 0 26px; }
   .disclosure-trigger { min-height: 68px; }
