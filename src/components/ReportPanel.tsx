@@ -166,7 +166,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     })
     const weekdayMax = Math.max(...weekdayTotals.map((row) => row.average), 0)
 
-    const comparisonMonths: { days: DaySpend[]; total: number }[] = []
+    const comparisonMonths: { days: DaySpend[]; total: number; spendDays: number }[] = []
     if (period === 'month' && elapsedDays > 0) {
       for (let offset = 1; offset <= 3; offset += 1) {
         const baselineStart = new Date(start.getFullYear(), start.getMonth() - offset, 1, 12)
@@ -175,13 +175,30 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
         const baselineEnd = new Date(baselineStart.getFullYear(), baselineStart.getMonth(), Math.min(elapsedDays, baselineLastDay), 12)
         const baselineDays = daysInRange(reportDays, baselineStart, baselineEnd)
         if (!baselineDays.every((day) => behaviorDetailAvailable(day, currency))) continue
-        comparisonMonths.push({ days: baselineDays, total: baselineDays.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0) })
+        comparisonMonths.push({
+          days: baselineDays,
+          total: baselineDays.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0),
+          spendDays: baselineDays.filter((day) => behaviorGrossAmountOf(day, currency) > 0).length,
+        })
       }
     }
 
     const baselineAverage = comparisonMonths.length === 0 ? null : comparisonMonths.reduce((sum, month) => sum + month.total, 0) / comparisonMonths.length
     const difference = baselineAverage === null ? null : behaviorGrossTotal - baselineAverage
     const differenceRate = baselineAverage && difference !== null ? difference / baselineAverage : null
+    const baselineSpendDays = comparisonMonths.length === 0
+      ? null
+      : comparisonMonths.reduce((sum, month) => sum + month.spendDays, 0) / comparisonMonths.length
+    const baselineSpendDayCount = comparisonMonths.reduce((sum, month) => sum + month.spendDays, 0)
+    const baselineSpendDayAmount = comparisonMonths.length === 0 || baselineSpendDayCount === 0
+      ? null
+      : comparisonMonths.reduce((sum, month) => sum + month.total, 0)
+        / baselineSpendDayCount
+    const spendDayAmount = spendDays === 0 ? 0 : behaviorGrossTotal / spendDays
+    const spendDaysDifference = baselineSpendDays === null ? null : spendDays - baselineSpendDays
+    const spendDayAmountRate = baselineSpendDayAmount && baselineSpendDayAmount > 0
+      ? (spendDayAmount - baselineSpendDayAmount) / baselineSpendDayAmount
+      : null
     const currentBehaviorCategories = behaviorCategories(days, currency)
     const baselineCategoryTotals = new Map<string, { name: string; value: number }>()
     for (const month of comparisonMonths) {
@@ -222,6 +239,8 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       baselineAverage,
       difference,
       differenceRate,
+      spendDaysDifference,
+      spendDayAmountRate,
       drivers,
     }
   }, [currency, end, period, report, start, year])
@@ -234,6 +253,16 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
         ? '基本持平'
         : `${(analysis.difference ?? 0) > 0 ? '↑' : '↓'} ${Math.round(Math.abs(analysis.differenceRate ?? 0) * 100)}%`
   const comparisonTone = (analysis.difference ?? 0) > 0 ? 'up' : (analysis.difference ?? 0) < 0 ? 'down' : 'flat'
+  const spendDaysCopy = analysis.spendDaysDifference === null
+    ? null
+    : Math.abs(analysis.spendDaysDifference) < .5
+      ? '支出日持平'
+      : `支出日 ${analysis.spendDaysDifference > 0 ? '+' : '−'}${Math.round(Math.abs(analysis.spendDaysDifference))} 天`
+  const spendDayAmountCopy = analysis.spendDayAmountRate === null
+    ? null
+    : Math.abs(analysis.spendDayAmountRate) < .02
+      ? '支出日均额持平'
+      : `支出日均额 ${analysis.spendDayAmountRate > 0 ? '+' : '−'}${Math.round(Math.abs(analysis.spendDayAmountRate) * 100)}%`
   const topWeekday = analysis.weekdayTotals.reduce((best, row) => row.average > best.average ? row : best, analysis.weekdayTotals[0])
   const topCategory = analysis.visibleCategories[0]
 
@@ -297,12 +326,15 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             </article>
           </section>
 
-          {analysis.drivers.length > 0 && analysis.comparisonMonths > 0 && (
+          {analysis.behaviorAvailable && analysis.comparisonMonths > 0 && (spendDaysCopy || spendDayAmountCopy || analysis.drivers.length > 0) && (
             <section className="change-summary" aria-labelledby="change-summary-title">
               <div className="quiet-heading"><span id="change-summary-title">主要变化</span><small>较近 {analysis.comparisonMonths} 个月同期</small></div>
-              <div className="change-list">
-                {analysis.drivers.map((driver) => <div key={driver.account}><span>{driver.name}</span><strong data-tone={driver.difference > 0 ? 'up' : 'down'}>{driver.difference > 0 ? '+' : ''}{formatMoney(driver.difference, currency)}</strong></div>)}
-              </div>
+              {(spendDaysCopy || spendDayAmountCopy) && <p className="change-factors">{[spendDaysCopy, spendDayAmountCopy].filter(Boolean).join(' · ')}</p>}
+              {analysis.drivers.length > 0 && (
+                <div className="change-list">
+                  {analysis.drivers.map((driver) => <div key={driver.account}><span>{driver.name}</span><strong data-tone={driver.difference > 0 ? 'up' : 'down'}>{driver.difference > 0 ? '+' : ''}{formatMoney(driver.difference, currency)}</strong></div>)}
+                </div>
+              )}
             </section>
           )}
 

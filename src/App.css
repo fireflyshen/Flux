@@ -260,6 +260,7 @@
 .quiet-heading { min-height: 24px; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .quiet-heading span { color: var(--text-soft); font-size: 10px; font-weight: 570; }
 .quiet-heading small { color: var(--text-faint); font-size: 8px; }
+.change-factors { margin: 6px 0 5px; color: var(--text-soft); font-size: 10px; line-height: 1.6; font-variant-numeric: tabular-nums; }
 .change-list { margin-top: 4px; }
 .change-list > div { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid color-mix(in srgb, var(--border) 42%, transparent); }
 .change-list span { overflow: hidden; color: var(--text-soft); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
