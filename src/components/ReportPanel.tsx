@@ -106,9 +106,15 @@ function behaviorCategories(days: DaySpend[], currency: string) {
 }
 
 function trendPoint(index: number, count: number, value: number | null, max: number) {
-  const x = count <= 1 ? 50 : 2 + index / (count - 1) * 96
+  const x = count <= 0 ? 50 : (index + .5) / count * 100
   const y = value === null || max <= 0 ? 30 : 30 - Math.max(0, value) / max * 26
   return { x, y }
+}
+
+function trendBaseline(count: number) {
+  if (count <= 0) return ''
+  const inset = 50 / count
+  return `M${inset.toFixed(2)} 30 H${(100 - inset).toFixed(2)}`
 }
 
 function trendPath(values: (number | null)[], max: number) {
@@ -158,9 +164,19 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       const behaviorNet = behaviorAvailable
         ? monthDays.reduce((sum, day) => sum + behaviorAmountOf(day, currency), 0)
         : null
+      const topTransaction = monthDays.flatMap((day) => day.transactions)
+        .filter((transaction) => !isAccrualTransaction(transaction))
+        .map((transaction) => ({
+          amount: transactionAmountOf(transaction, currency),
+          label: transaction.payee && transaction.narration
+            ? `${transaction.payee} · ${transaction.narration}`
+            : transaction.narration || transaction.payee || '未命名交易',
+        }))
+        .filter((transaction) => transaction.amount > 0)
+        .reduce<{ amount: number; label: string } | null>((largest, transaction) => !largest || transaction.amount > largest.amount ? transaction : largest, null)
       const incomplete = year === today.getFullYear() && month === today.getMonth()
       const hasActivity = monthDays.some((day) => amountOf(day, currency, 'gross') !== 0 || amountOf(day, currency, 'refunds') !== 0)
-      return { month, label: `${month + 1}月`, behaviorNet, periodCost, incomplete, hasActivity }
+      return { month, label: `${month + 1}月`, behaviorNet, periodCost, topTransaction, incomplete, hasActivity }
     }).filter((row) => !row.incomplete || row.hasActivity)
     const trendMax = Math.max(...monthTrend.flatMap((row) => [row.behaviorNet ?? 0, row.periodCost]), 0)
     const weekdayOccurrences = Array<number>(7).fill(0)
@@ -327,6 +343,9 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const trendSummary = latestTrendMonth
     ? `${latestTrendMonth.label} ${latestTrendMonth.behaviorNet === null ? '—' : formatMoney(latestTrendMonth.behaviorNet, currency)}${peakTrendMonth ? peakTrendMonth.month === latestTrendMonth.month ? ' · 年内峰值' : ` · ${peakTrendMonth.label}峰值` : ''}`
     : '暂无趋势'
+  const peakTransactionShare = peakTrendMonth?.topTransaction && peakTrendMonth.behaviorNet && peakTrendMonth.behaviorNet > 0
+    ? peakTrendMonth.topTransaction.amount / peakTrendMonth.behaviorNet
+    : 0
 
   const selectedCategory = selectedAccountScope === 'behavior'
     ? analysis.drivers.find((row) => row.account === selectedAccount) ?? null
@@ -374,10 +393,16 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             <span>期间成本 {formatMoney(activeTrendMonth.periodCost, currency)}</span>
             {activeTrendMonth.incomplete && <em>进行中</em>}
           </div>
+          {peakTrendMonth?.topTransaction && (
+            <button className="trend-peak-note" type="button" onClick={() => setSelectedTrendMonth(peakTrendMonth.month)} aria-label={`定位到${peakTrendMonth.label}峰值：${peakTrendMonth.topTransaction.label}，${formatMoney(peakTrendMonth.topTransaction.amount, currency)}`}>
+              <span><small>{peakTrendMonth.label}峰值</small><strong>{peakTransactionShare >= .3 ? '主要来自' : '最大单笔'} · {peakTrendMonth.topTransaction.label}</strong></span>
+              <em>{formatMoney(peakTrendMonth.topTransaction.amount, currency)}</em>
+            </button>
+          )}
           <div className="trend-chart">
             <div className="trend-plot">
               <svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
-                <path className="trend-baseline" d="M2 30 H98" />
+                <path className="trend-baseline" d={trendBaseline(analysis.monthTrend.length)} />
                 <path className="trend-line" data-series="behavior" d={trendPath(analysis.monthTrend.map((row) => row.behaviorNet), analysis.trendMax)} />
               </svg>
               <i className="trend-cursor" style={{ left: `${activeBehaviorPoint.x}%` }} aria-hidden="true" />
@@ -385,7 +410,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             </div>
             <div className="trend-months" style={{ gridTemplateColumns: `repeat(${analysis.monthTrend.length}, minmax(0, 1fr))` }}>
               {analysis.monthTrend.map((row) => (
-                <button type="button" key={row.month} data-active={row.month === activeTrendMonth.month || undefined} onClick={() => setSelectedTrendMonth(row.month)} aria-label={`查看 ${row.label}趋势数据`}>{row.month + 1}</button>
+                <button type="button" key={row.month} data-active={row.month === activeTrendMonth.month || undefined} onClick={() => setSelectedTrendMonth(row.month)} aria-label={`查看 ${row.label}趋势数据`}>{row.month === activeTrendMonth.month ? row.label : row.month + 1}</button>
               ))}
             </div>
           </div>

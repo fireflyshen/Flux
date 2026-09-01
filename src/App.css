@@ -287,6 +287,14 @@
 .trend-reading strong { color: var(--text); font-size: 12px; font-weight: 620; }
 .trend-reading span { white-space: nowrap; }
 .trend-reading em { padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); border-radius: 99px; color: var(--accent-deep); font-size: 7px; font-style: normal; }
+.trend-peak-note { width: 100%; min-height: 39px; margin: 4px 0 6px; padding: 3px 8px 3px 10px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; color: inherit; text-align: left; border: 0; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 0 7px 7px 0; background: transparent; cursor: pointer; transition: background .18s; }
+.trend-peak-note:hover { background: color-mix(in srgb, var(--accent-soft) 20%, transparent); }
+.trend-peak-note:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+.trend-peak-note > span { min-width: 0; }
+.trend-peak-note small, .trend-peak-note strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trend-peak-note small { color: var(--accent-deep); font-size: 7px; font-weight: 600; }
+.trend-peak-note strong { margin-top: 3px; color: var(--text-soft); font-size: 9px; font-weight: 550; }
+.trend-peak-note > em { color: var(--text-soft); font-size: 9px; font-style: normal; font-weight: 620; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .trend-chart { position: relative; margin-top: 8px; }
 .trend-plot { position: relative; height: 76px; }
 .trend-plot svg { width: 100%; height: 76px; display: block; overflow: visible; }
