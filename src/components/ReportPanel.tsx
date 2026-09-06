@@ -379,9 +379,8 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const canShift = (amount: number) => period !== 'year' && shiftAnchor(anchor, period, amount).getFullYear() === year
   const trendDisclosure = analysis.monthTrend.length > 1 && activeTrendMonth && activeBehaviorPoint ? (
     <section>
-      <button type="button" className="disclosure-trigger trend-trigger" aria-expanded={openSection === 'trend'} onClick={() => setOpenSection((current) => current === 'trend' ? null : 'trend')}>
+      <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'trend'} onClick={() => setOpenSection((current) => current === 'trend' ? null : 'trend')}>
         <div><strong>年度走势</strong><small>{trendSummary}</small></div>
-        <svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><path d={trendPath(analysis.monthTrend.map((row) => row.behaviorNet), analysis.trendMax)} /></svg>
         <span>{openSection === 'trend' ? '收起' : '查看'}</span>
       </button>
       <div className="disclosure-body" data-open={openSection === 'trend' || undefined}>
