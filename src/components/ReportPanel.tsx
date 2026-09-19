@@ -9,6 +9,7 @@ import {
   formatMoney,
   fromDateKey,
   isAccrualTransaction,
+  toDateKey,
   transactionAmountOf,
   type DaySpend,
   type ExpenseCategory,
@@ -18,6 +19,7 @@ import { DrawerShell } from './DrawerShell'
 import { PixelLoader } from './PixelLoader'
 
 type Period = 'week' | 'month' | 'quarter' | 'year'
+type AccountTrendGrain = 'day' | 'week' | 'month'
 
 const weekdayCopy = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
@@ -31,6 +33,7 @@ interface ReportPanelProps {
 }
 
 const periodCopy: Record<Period, string> = { week: '周', month: '月', quarter: '季度', year: '年' }
+const accountTrendGrainCopy: Record<AccountTrendGrain, string> = { day: '按日', week: '按周', month: '按月' }
 
 function yearAnchor(year: number) {
   const now = new Date()
@@ -105,6 +108,83 @@ function behaviorCategories(days: DaySpend[], currency: string) {
   return rows
 }
 
+interface AccountTrendPoint {
+  key: string
+  label: string
+  shortLabel: string
+  value: number
+  transactionCount: number
+}
+
+function accountTrendGrain(period: Period): AccountTrendGrain {
+  if (period === 'year') return 'month'
+  if (period === 'quarter') return 'week'
+  return 'day'
+}
+
+function accountSpendOnDay(day: DaySpend, account: string, currency: string) {
+  let value = 0
+  let transactionCount = 0
+  for (const transaction of day.transactions) {
+    if (isAccrualTransaction(transaction)) continue
+    const transactionValue = transaction.categories
+      .filter((category) => category.account === account && category.currency === currency)
+      .reduce((sum, category) => sum + Number(category.gross), 0)
+    value += transactionValue
+    if (transactionValue !== 0) transactionCount += 1
+  }
+  return { value, transactionCount }
+}
+
+function accountTrendPoints(days: DaySpend[], account: string, currency: string, period: Period, start: Date, end: Date) {
+  const today = new Date()
+  today.setHours(12, 0, 0, 0)
+  const visibleEnd = end < today ? new Date(end) : today
+  if (visibleEnd < start) return []
+
+  const grain = accountTrendGrain(period)
+  const points: AccountTrendPoint[] = []
+  let cursor = new Date(start)
+  while (cursor <= visibleEnd) {
+    const bucketStart = new Date(cursor)
+    const bucketEnd = new Date(cursor)
+    if (grain === 'month') {
+      bucketStart.setDate(1)
+      bucketEnd.setFullYear(bucketStart.getFullYear(), bucketStart.getMonth() + 1, 0)
+    } else if (grain === 'week') {
+      bucketEnd.setDate(bucketEnd.getDate() + (7 - ((bucketEnd.getDay() + 6) % 7) - 1))
+    }
+    if (bucketEnd > visibleEnd) bucketEnd.setTime(visibleEnd.getTime())
+
+    const label = grain === 'month'
+      ? `${bucketStart.getFullYear()} 年 ${bucketStart.getMonth() + 1} 月`
+      : grain === 'week'
+        ? `${bucketStart.getMonth() + 1}.${bucketStart.getDate()} — ${bucketEnd.getMonth() + 1}.${bucketEnd.getDate()}`
+        : formatDate(toDateKey(bucketStart))
+    const shortLabel = grain === 'month'
+      ? `${bucketStart.getMonth() + 1}月`
+      : `${bucketStart.getMonth() + 1}.${bucketStart.getDate()}`
+    const point = { key: toDateKey(bucketStart), label, shortLabel, value: 0, transactionCount: 0 }
+    for (const day of daysInRange(days, bucketStart, bucketEnd)) {
+      const daySpend = accountSpendOnDay(day, account, currency)
+      point.value += daySpend.value
+      point.transactionCount += daySpend.transactionCount
+    }
+    points.push(point)
+
+    cursor = new Date(bucketEnd)
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return points
+}
+
+function showAccountTrendLabel(index: number, count: number, grain: AccountTrendGrain) {
+  if (index === 0 || index === count - 1) return true
+  if (grain === 'month') return true
+  if (grain === 'week') return index % 2 === 0
+  return index % 5 === 0
+}
+
 function trendPoint(index: number, count: number, value: number | null, max: number) {
   const x = count <= 0 ? 50 : (index + .5) / count * 100
   const y = value === null || max <= 0 ? 30 : 30 - Math.max(0, value) / max * 26
@@ -138,7 +218,9 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const [selectedAccountScope, setSelectedAccountScope] = useState<'behavior' | 'cost'>('cost')
   const [selectedWeekday, setSelectedWeekday] = useState<number | null>(null)
   const [selectedTrendMonth, setSelectedTrendMonth] = useState<number | null>(null)
-  const [openSection, setOpenSection] = useState<'trend' | 'weekday' | 'structure' | null>(null)
+  const [selectedTrendAccount, setSelectedTrendAccount] = useState<string | null>(null)
+  const [selectedAccountTrendPoint, setSelectedAccountTrendPoint] = useState<string | null>(null)
+  const [openSection, setOpenSection] = useState<'account' | 'trend' | 'weekday' | 'structure' | null>(null)
   const { start, end } = periodRange(period, anchor)
 
   const analysis = useMemo(() => {
@@ -308,6 +390,30 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     }
   }, [currency, end, period, report, start, year])
 
+  const accountTrendAccounts = useMemo(() => {
+    const periodAccounts = behaviorCategories(analysis.days, currency)
+    return [...behaviorCategories(report?.days ?? [], currency).values()]
+      .filter((row) => row.value > 0)
+      .sort((a, b) => (periodAccounts.get(b.account)?.value ?? 0) - (periodAccounts.get(a.account)?.value ?? 0) || b.value - a.value)
+  }, [analysis.days, currency, report])
+  const activeTrendAccount = accountTrendAccounts.find((row) => row.account === selectedTrendAccount)
+    ?? accountTrendAccounts[0]
+    ?? null
+  const accountTrend = useMemo(() => activeTrendAccount
+    ? accountTrendPoints(report?.days ?? [], activeTrendAccount.account, currency, period, start, end)
+    : [], [activeTrendAccount, currency, end, period, report, start])
+  const activeAccountTrendPoint = accountTrend.find((row) => row.key === selectedAccountTrendPoint)
+    ?? accountTrend.findLast((row) => row.value > 0)
+    ?? accountTrend.at(-1)
+    ?? null
+  const activeAccountTrendIndex = activeAccountTrendPoint ? accountTrend.findIndex((row) => row.key === activeAccountTrendPoint.key) : -1
+  const accountTrendMax = Math.max(...accountTrend.map((row) => row.value), 0)
+  const activeAccountTrendDot = activeAccountTrendPoint
+    ? trendPoint(activeAccountTrendIndex, accountTrend.length, activeAccountTrendPoint.value, accountTrendMax)
+    : null
+  const accountTrendTotal = accountTrend.reduce((sum, row) => sum + row.value, 0)
+  const accountTrendDimension = accountTrendGrain(period)
+
   const comparisonCopy = period !== 'month' || analysis.comparisonMonths === 0
     ? null
     : analysis.baselineAverage === 0
@@ -377,6 +483,50 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const selectedWeekdayTotal = selectedWeekdayTransactions.reduce((sum, row) => sum + row.value, 0)
 
   const canShift = (amount: number) => period !== 'year' && shiftAnchor(anchor, period, amount).getFullYear() === year
+  const accountTrendDisclosure = activeTrendAccount && activeAccountTrendPoint && activeAccountTrendDot ? (
+    <section>
+      <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'account'} onClick={() => setOpenSection((current) => current === 'account' ? null : 'account')}>
+        <div><strong>账户趋势</strong><small>{activeTrendAccount.name} · {accountTrendGrainCopy[accountTrendDimension]} · {formatMoney(accountTrendTotal, currency)}</small></div>
+        <span>{openSection === 'account' ? '收起' : '查看'}</span>
+      </button>
+      <div className="disclosure-body" data-open={openSection === 'account' || undefined}>
+        <div><div className="account-trend-detail">
+          <div className="account-trend-toolbar">
+            <label>
+              <span>费用账户</span>
+              <select value={activeTrendAccount.account} onChange={(event) => { setSelectedTrendAccount(event.target.value); setSelectedAccountTrendPoint(null) }}>
+                {accountTrendAccounts.map((row) => <option key={row.account} value={row.account}>{row.name}</option>)}
+              </select>
+            </label>
+            <span>{rangeLabel(period, start, end)} · {accountTrendGrainCopy[accountTrendDimension]}</span>
+          </div>
+          <div className="trend-reading account-trend-reading" aria-live="polite">
+            <strong>{activeAccountTrendPoint.label}</strong>
+            <span>{formatMoney(activeAccountTrendPoint.value, currency)}</span>
+            <span>{activeAccountTrendPoint.transactionCount} 笔</span>
+          </div>
+          <div className="trend-chart account-trend-chart">
+            <div className="trend-plot">
+              <svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+                <path className="trend-baseline" d={trendBaseline(accountTrend.length)} />
+                <path className="trend-line" data-series="behavior" d={trendPath(accountTrend.map((row) => row.value), accountTrendMax)} />
+              </svg>
+              <i className="trend-cursor" style={{ left: `${activeAccountTrendDot.x}%` }} aria-hidden="true" />
+              <i className="trend-dot" data-series="behavior" style={{ left: `${activeAccountTrendDot.x}%`, top: `${activeAccountTrendDot.y / 32 * 100}%` }} aria-hidden="true" />
+            </div>
+            <div className="account-trend-labels" style={{ gridTemplateColumns: `repeat(${accountTrend.length}, minmax(0, 1fr))` }}>
+              {accountTrend.map((row, index) => (
+                <button type="button" key={row.key} data-active={row.key === activeAccountTrendPoint.key || undefined} onClick={() => setSelectedAccountTrendPoint(row.key)} title={`${row.label} · ${formatMoney(row.value, currency)}`} aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}>
+                  {showAccountTrendLabel(index, accountTrend.length, accountTrendDimension) || row.key === activeAccountTrendPoint.key ? row.shortLabel : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="account-trend-note">行为毛支出（退款前） · 已排除摊销与计提</p>
+        </div></div>
+      </div>
+    </section>
+  ) : null
   const trendDisclosure = analysis.monthTrend.length > 1 && activeTrendMonth && activeBehaviorPoint ? (
     <section>
       <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'trend'} onClick={() => setOpenSection((current) => current === 'trend' ? null : 'trend')}>
@@ -471,6 +621,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
           )}
 
           <div className="report-disclosures">
+            {accountTrendDisclosure}
             {trendDisclosure}
             <section>
               <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'weekday'} onClick={() => setOpenSection((current) => current === 'weekday' ? null : 'weekday')}>
@@ -514,7 +665,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             </section>
           </div>
         </>
-      ) : <><div className="report-empty" data-compact>这一周期尚无 {currency} 支出</div>{trendDisclosure && <div className="report-disclosures">{trendDisclosure}</div>}</>}
+      ) : <><div className="report-empty" data-compact>这一周期尚无 {currency} 支出</div>{(accountTrendDisclosure || trendDisclosure) && <div className="report-disclosures">{accountTrendDisclosure}{trendDisclosure}</div>}</>}
 
       <footer className="report-footnote">行为口径排除摊销与计提 · 期间成本保留全部费用</footer>
 

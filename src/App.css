@@ -311,6 +311,24 @@
 .trend-months button[data-active]::after { background: var(--accent); }
 .trend-months button:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: -2px; border-radius: 5px; }
 
+.account-trend-detail { padding-top: 1px; }
+.account-trend-toolbar { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.account-trend-toolbar label { min-width: 0; display: flex; align-items: center; gap: 9px; }
+.account-trend-toolbar label > span, .account-trend-toolbar > span { flex: 0 0 auto; color: var(--text-faint); font-size: 8px; }
+.account-trend-toolbar select { max-width: min(260px, 42vw); height: 30px; padding: 0 28px 0 9px; overflow: hidden; color: var(--text); text-overflow: ellipsis; border: 1px solid color-mix(in srgb, var(--border) 78%, transparent); border-radius: 7px; outline: 0; background: var(--surface-raised); font: inherit; font-size: 10px; font-weight: 570; cursor: pointer; }
+.account-trend-toolbar select:focus-visible { border-color: color-mix(in srgb, var(--accent) 62%, var(--border)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
+.account-trend-reading { margin-top: 9px; }
+.account-trend-reading strong { min-width: 92px; }
+.account-trend-chart { margin-top: 5px; }
+.account-trend-labels { display: grid; margin-top: 1px; }
+.account-trend-labels button { position: relative; min-width: 0; height: 25px; padding: 0; overflow: visible; border: 0; color: var(--text-faint); background: transparent; font-size: 7px; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; transition: color .16s; }
+.account-trend-labels button::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 3px; height: 3px; border-radius: 50%; background: transparent; transform: translateX(-50%); }
+.account-trend-labels button:hover, .account-trend-labels button[data-active] { color: var(--text); }
+.account-trend-labels button[data-active] { font-weight: 650; }
+.account-trend-labels button[data-active]::after { background: var(--accent); }
+.account-trend-labels button:focus-visible { z-index: 1; outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: -2px; border-radius: 5px; }
+.account-trend-note { margin: 9px 0 0; color: var(--text-faint); font-size: 8px; line-height: 1.5; }
+
 .report-disclosures { border-top: 1px solid color-mix(in srgb, var(--border) 56%, transparent); }
 .disclosure-trigger { width: 100%; min-height: 64px; padding: 11px 2px; display: flex; align-items: center; justify-content: space-between; gap: 20px; color: inherit; text-align: left; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 56%, transparent); background: transparent; cursor: pointer; }
 .disclosure-trigger > div { min-width: 0; }
@@ -639,6 +657,12 @@
   .trend-reading { min-height: 43px; margin-top: 10px; flex-wrap: wrap; gap: 4px 11px; }
   .trend-reading strong { width: 100%; }
   .trend-plot, .trend-plot svg { height: 68px; }
+  .account-trend-toolbar { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .account-trend-toolbar label { width: 100%; justify-content: space-between; }
+  .account-trend-toolbar select { max-width: 68vw; height: 34px; font-size: 11px; }
+  .account-trend-reading strong { min-width: 0; }
+  .account-trend-labels button { font-size: 7px; }
+  .account-trend-note { font-size: 9px; }
   .disclosure-trigger { min-height: 68px; }
   .disclosure-trigger strong { font-size: 12px; }
   .disclosure-trigger small { max-width: 72vw; font-size: 9px; }
