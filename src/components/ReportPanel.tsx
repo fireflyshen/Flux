@@ -19,6 +19,7 @@ import { DrawerShell } from './DrawerShell'
 import { PixelLoader } from './PixelLoader'
 
 type Period = 'week' | 'month' | 'quarter' | 'year'
+type ReportView = 'account' | 'trend' | 'weekday' | 'structure'
 type AccountTrendGrain = 'day' | 'week' | 'month'
 
 const weekdayCopy = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -222,7 +223,8 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const [selectedAccountTrendPoint, setSelectedAccountTrendPoint] = useState<string | null>(null)
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [accountPickerClosing, setAccountPickerClosing] = useState(false)
-  const [openSection, setOpenSection] = useState<'account' | 'trend' | 'weekday' | 'structure' | null>(null)
+  const [accountQuery, setAccountQuery] = useState('')
+  const [activeReportView, setActiveReportView] = useState<ReportView>('account')
   const { start, end } = periodRange(period, anchor)
 
   const analysis = useMemo(() => {
@@ -398,6 +400,11 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       .filter((row) => row.value > 0)
       .sort((a, b) => (accountTrendPeriodAccounts.get(b.account)?.value ?? 0) - (accountTrendPeriodAccounts.get(a.account)?.value ?? 0) || b.value - a.value)
   }, [accountTrendPeriodAccounts, currency, report])
+  const filteredTrendAccounts = useMemo(() => {
+    const query = accountQuery.trim().toLocaleLowerCase()
+    if (!query) return accountTrendAccounts
+    return accountTrendAccounts.filter((row) => row.name.toLocaleLowerCase().includes(query) || row.account.toLocaleLowerCase().includes(query))
+  }, [accountQuery, accountTrendAccounts])
   const activeTrendAccount = accountTrendAccounts.find((row) => row.account === selectedTrendAccount)
     ?? accountTrendAccounts[0]
     ?? null
@@ -413,7 +420,6 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const activeAccountTrendDot = activeAccountTrendPoint
     ? trendPoint(activeAccountTrendIndex, accountTrend.length, activeAccountTrendPoint.value, accountTrendMax)
     : null
-  const accountTrendTotal = accountTrend.reduce((sum, row) => sum + row.value, 0)
   const accountTrendDimension = accountTrendGrain(period)
 
   const comparisonCopy = period !== 'month' || analysis.comparisonMonths === 0
@@ -485,16 +491,10 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const selectedWeekdayTotal = selectedWeekdayTransactions.reduce((sum, row) => sum + row.value, 0)
 
   const canShift = (amount: number) => period !== 'year' && shiftAnchor(anchor, period, amount).getFullYear() === year
-  const accountTrendDisclosure = activeTrendAccount && activeAccountTrendPoint && activeAccountTrendDot ? (
-    <section>
-      <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'account'} onClick={() => setOpenSection((current) => current === 'account' ? null : 'account')}>
-        <div><strong>账户趋势</strong><small>{activeTrendAccount.name} · {accountTrendGrainCopy[accountTrendDimension]} · {formatMoney(accountTrendTotal, currency)}</small></div>
-        <span>{openSection === 'account' ? '收起' : '查看'}</span>
-      </button>
-      <div className="disclosure-body" data-open={openSection === 'account' || undefined}>
-        <div><div className="account-trend-detail">
+  const accountTrendView = activeTrendAccount && activeAccountTrendPoint && activeAccountTrendDot ? (
+    <div className="report-view account-trend-detail">
           <div className="account-trend-toolbar">
-            <button className="account-trend-account-trigger" type="button" onClick={() => { setAccountPickerClosing(false); setAccountPickerOpen(true) }} aria-haspopup="dialog">
+            <button className="account-trend-account-trigger" type="button" onClick={() => { setAccountQuery(''); setAccountPickerClosing(false); setAccountPickerOpen(true) }} aria-haspopup="dialog">
               <small>费用账户</small><strong>{activeTrendAccount.name}</strong><span aria-hidden="true">›</span>
             </button>
             <span>{rangeLabel(period, start, end)} · {accountTrendGrainCopy[accountTrendDimension]}</span>
@@ -535,18 +535,11 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             </div>
           </div>
           <p className="account-trend-note">行为毛支出（退款前） · 已排除摊销与计提</p>
-        </div></div>
-      </div>
-    </section>
+    </div>
   ) : null
-  const trendDisclosure = analysis.monthTrend.length > 1 && activeTrendMonth && activeBehaviorPoint ? (
-    <section>
-      <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'trend'} onClick={() => setOpenSection((current) => current === 'trend' ? null : 'trend')}>
-        <div><strong>年度走势</strong><small>{trendSummary}</small></div>
-        <span>{openSection === 'trend' ? '收起' : '查看'}</span>
-      </button>
-      <div className="disclosure-body" data-open={openSection === 'trend' || undefined}>
-        <div><div className="trend-detail">
+  const trendView = analysis.monthTrend.length > 1 && activeTrendMonth && activeBehaviorPoint ? (
+    <div className="report-view trend-detail">
+          <div className="report-view-context"><span>年度走势</span><small>{trendSummary}</small></div>
           <div className="trend-reading" aria-live="polite">
             <strong>{activeTrendMonth.label}</strong>
             <span>行为 {activeTrendMonth.behaviorNet === null ? '—' : formatMoney(activeTrendMonth.behaviorNet, currency)}</span>
@@ -575,10 +568,50 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
               ))}
             </div>
           </div>
-        </div></div>
-      </div>
-    </section>
+    </div>
   ) : null
+
+  const weekdayView = (
+    <div className="report-view">
+      <div className="report-view-context"><span>消费习惯</span><small>{topWeekday.name}平均 {formatMoney(topWeekday.average, currency)} · {topWeekday.spendDays}/{topWeekday.days} 天消费</small></div>
+      <div className="weekday-bars">
+        {analysis.weekdayTotals.map((row, weekday) => (
+          <button className="weekday-row" type="button" key={row.name} data-top={row.average === analysis.weekdayMax && row.average > 0 || undefined} onClick={() => setSelectedWeekday(weekday)} aria-haspopup="dialog">
+            <span className="weekday-name">{row.name}</span>
+            <div className="weekday-track"><i style={{ width: `${analysis.weekdayMax <= 0 ? 0 : row.average / analysis.weekdayMax * 100}%` }} /></div>
+            <span className="weekday-value">{formatMoney(row.average, currency)}</span>
+            <small>{row.spendDays}/{row.days} 天 · {row.days === 0 ? 0 : Math.round(row.spendDays / row.days * 100)}%</small>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
+  const structureView = (
+    <div className="report-view">
+      <div className="report-view-context"><span>期间成本结构</span><small>{topCategory ? `${topCategory.name} · ${Math.round(topCategory.value / analysis.categoryTotal * 100)}%` : '暂无分类'}</small></div>
+      <div className="composition-bar" aria-label="分类支出占比">
+        {analysis.visibleCategories.map((row, index) => <i key={row.account} data-tone={index} style={{ width: `${analysis.categoryTotal <= 0 ? 0 : row.value / analysis.categoryTotal * 100}%` }} />)}
+      </div>
+      <div className="category-summary-grid">
+        {analysis.visibleCategories.map((row, index) => (
+          <button className="category-summary" type="button" key={row.account} onClick={() => { setSelectedAccountScope('cost'); setSelectedAccount(row.account) }} aria-haspopup="dialog">
+            <i data-tone={index} aria-hidden="true" />
+            <div><strong>{row.name}</strong><small>{formatMoney(row.value, currency)}</small></div>
+            <span>{analysis.categoryTotal <= 0 ? '0%' : `${Math.round(row.value / analysis.categoryTotal * 100)}%`}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
+  const reportViews = [
+    accountTrendView ? { key: 'account' as const, label: '账户趋势', content: accountTrendView } : null,
+    trendView ? { key: 'trend' as const, label: '年度走势', content: trendView } : null,
+    analysis.categoryRows.length > 0 ? { key: 'weekday' as const, label: '消费习惯', content: weekdayView } : null,
+    analysis.categoryRows.length > 0 ? { key: 'structure' as const, label: '成本结构', content: structureView } : null,
+  ].filter((view): view is NonNullable<typeof view> => view !== null)
+  const visibleReportView = reportViews.find((view) => view.key === activeReportView) ?? reportViews[0]
 
   return (
     <section className="report-panel" aria-label={`${year} 年支出洞察`} data-loading={loading || undefined}>
@@ -632,52 +665,16 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
             </section>
           )}
 
-          <div className="report-disclosures">
-            {accountTrendDisclosure}
-            {trendDisclosure}
-            <section>
-              <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'weekday'} onClick={() => setOpenSection((current) => current === 'weekday' ? null : 'weekday')}>
-                <div><strong>消费习惯</strong><small>{topWeekday.name}平均 {formatMoney(topWeekday.average, currency)} · {topWeekday.spendDays}/{topWeekday.days} 天消费</small></div>
-                <span>{openSection === 'weekday' ? '收起' : '查看'}</span>
-              </button>
-              <div className="disclosure-body" data-open={openSection === 'weekday' || undefined}>
-                <div><div className="weekday-bars">
-                  {analysis.weekdayTotals.map((row, weekday) => (
-                    <button className="weekday-row" type="button" key={row.name} data-top={row.average === analysis.weekdayMax && row.average > 0 || undefined} onClick={() => setSelectedWeekday(weekday)} aria-haspopup="dialog">
-                      <span className="weekday-name">{row.name}</span>
-                      <div className="weekday-track"><i style={{ width: `${analysis.weekdayMax <= 0 ? 0 : row.average / analysis.weekdayMax * 100}%` }} /></div>
-                      <span className="weekday-value">{formatMoney(row.average, currency)}</span>
-                      <small>{row.spendDays}/{row.days} 天 · {row.days === 0 ? 0 : Math.round(row.spendDays / row.days * 100)}%</small>
-                    </button>
-                  ))}
-                </div></div>
-              </div>
-            </section>
-            <section>
-              <button type="button" className="disclosure-trigger" aria-expanded={openSection === 'structure'} onClick={() => setOpenSection((current) => current === 'structure' ? null : 'structure')}>
-                <div><strong>期间成本结构</strong><small>{topCategory ? `${topCategory.name} · ${Math.round(topCategory.value / analysis.categoryTotal * 100)}%` : '暂无分类'}</small></div>
-                <span>{openSection === 'structure' ? '收起' : '查看'}</span>
-              </button>
-              <div className="disclosure-body" data-open={openSection === 'structure' || undefined}>
-                <div>
-                  <div className="composition-bar" aria-label="分类支出占比">
-                    {analysis.visibleCategories.map((row, index) => <i key={row.account} data-tone={index} style={{ width: `${analysis.categoryTotal <= 0 ? 0 : row.value / analysis.categoryTotal * 100}%` }} />)}
-                  </div>
-                  <div className="category-summary-grid">
-                    {analysis.visibleCategories.map((row, index) => (
-                      <button className="category-summary" type="button" key={row.account} onClick={() => { setSelectedAccountScope('cost'); setSelectedAccount(row.account) }} aria-haspopup="dialog">
-                        <i data-tone={index} aria-hidden="true" />
-                        <div><strong>{row.name}</strong><small>{formatMoney(row.value, currency)}</small></div>
-                        <span>{analysis.categoryTotal <= 0 ? '0%' : `${Math.round(row.value / analysis.categoryTotal * 100)}%`}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
+          <section className="report-explorer" aria-label="报表分析">
+            <div className="report-view-tabs" role="tablist" aria-label="分析维度">
+              {reportViews.map((view) => (
+                <button type="button" role="tab" key={view.key} aria-selected={view.key === visibleReportView.key} data-active={view.key === visibleReportView.key || undefined} onClick={() => setActiveReportView(view.key)}>{view.label}</button>
+              ))}
+            </div>
+            <div className="report-view-stage" role="tabpanel" aria-label={visibleReportView.label}>{visibleReportView.content}</div>
+          </section>
         </>
-      ) : <><div className="report-empty" data-compact>这一周期尚无 {currency} 支出</div>{(accountTrendDisclosure || trendDisclosure) && <div className="report-disclosures">{accountTrendDisclosure}{trendDisclosure}</div>}</>}
+      ) : <><div className="report-empty" data-compact>这一周期尚无 {currency} 支出</div>{(accountTrendView || trendView) && <section className="report-explorer" aria-label="报表分析"><div className="report-view-tabs" role="tablist" aria-label="分析维度">{reportViews.map((view) => <button type="button" role="tab" key={view.key} aria-selected={view.key === visibleReportView.key} data-active={view.key === visibleReportView.key || undefined} onClick={() => setActiveReportView(view.key)}>{view.label}</button>)}</div><div className="report-view-stage" role="tabpanel" aria-label={visibleReportView.label}>{visibleReportView.content}</div></section>}</>}
 
       <footer className="report-footnote">行为口径排除摊销与计提 · 期间成本保留全部费用</footer>
 
@@ -689,11 +686,16 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
               <h2 id="account-picker-title">选择账户</h2>
               <div className="page-meta"><span>{rangeLabel(period, start, end)} · 按当前周期消费排序</span></div>
             </div>
+            <label className="account-picker-search">
+              <span className="sr-only">搜索账户</span>
+              <input type="search" value={accountQuery} onChange={(event) => setAccountQuery(event.target.value)} placeholder="搜索账户" aria-label="搜索账户" autoFocus />
+              <small>{filteredTrendAccounts.length}</small>
+            </label>
             <div className="account-picker-list">
-              {accountTrendAccounts.map((row) => {
+              {filteredTrendAccounts.map((row) => {
                 const periodRow = accountTrendPeriodAccounts.get(row.account)
                 const active = row.account === activeTrendAccount.account
-                return <button type="button" key={row.account} data-active={active || undefined} aria-pressed={active} onClick={() => {
+                return <button className="account-picker-row" type="button" key={row.account} data-active={active || undefined} aria-pressed={active} onClick={() => {
                   setSelectedTrendAccount(row.account)
                   setSelectedAccountTrendPoint(null)
                   setAccountPickerClosing(true)
@@ -703,6 +705,7 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
                   <em>{periodRow?.value ? formatMoney(periodRow.value, currency) : '—'}</em>
                 </button>
               })}
+              {filteredTrendAccounts.length === 0 && <p className="account-picker-empty">没有匹配的账户</p>}
             </div>
           </div>
         </DrawerShell>

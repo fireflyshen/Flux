@@ -337,6 +337,12 @@
 .account-trend-note { margin: 9px 0 0; color: var(--text-faint); font-size: 8px; line-height: 1.5; }
 .account-picker-heading .eyebrow { display: block; margin-bottom: 9px; color: var(--text-faint); font-size: 9px; }
 .account-picker-heading h2 { font-size: 24px; }
+.account-picker-search { height: 42px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent); }
+.account-picker-search:focus-within { border-color: color-mix(in srgb, var(--accent) 58%, var(--border)); }
+.account-picker-search input { min-width: 0; flex: 1; padding: 0 2px; border: 0; outline: 0; color: var(--text); background: transparent; font: inherit; font-size: 12px; }
+.account-picker-search input::placeholder { color: var(--text-faint); }
+.account-picker-search input::-webkit-search-cancel-button { opacity: .45; }
+.account-picker-search small { color: var(--text-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
 .account-picker-list { border-top: 1px solid color-mix(in srgb, var(--border) 56%, transparent); }
 .account-picker-list button { width: 100%; min-height: 56px; padding: 7px 2px; display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 12px; color: inherit; text-align: left; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 56%, transparent); background: transparent; cursor: pointer; transition: background .16s; }
 .account-picker-list button:hover { background: color-mix(in srgb, var(--surface-muted) 60%, transparent); }
@@ -348,20 +354,21 @@
 .account-picker-list strong { color: var(--text); font-size: 12px; font-weight: 570; }
 .account-picker-list small { margin-top: 4px; color: var(--text-faint); font-size: 9px; }
 .account-picker-list em { color: var(--text-soft); font-size: 11px; font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.account-picker-empty { margin: 0; padding: 42px 2px; color: var(--text-faint); font-size: 11px; text-align: center; }
 
-.report-disclosures { border-top: 1px solid color-mix(in srgb, var(--border) 56%, transparent); }
-.disclosure-trigger { width: 100%; min-height: 64px; padding: 11px 2px; display: flex; align-items: center; justify-content: space-between; gap: 20px; color: inherit; text-align: left; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 56%, transparent); background: transparent; cursor: pointer; }
-.disclosure-trigger > div { min-width: 0; }
-.disclosure-trigger strong, .disclosure-trigger small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.disclosure-trigger strong { color: var(--text); font-size: 11px; font-weight: 570; }
-.disclosure-trigger small { margin-top: 5px; color: var(--text-faint); font-size: 8px; }
-.disclosure-trigger > span { flex: 0 0 auto; color: var(--text-faint); font-size: 9px; }
-.disclosure-trigger:hover > span { color: var(--text-soft); }
-.disclosure-trigger:focus-visible { outline-offset: -2px; }
-.disclosure-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .4s var(--ease-apple); }
-.disclosure-body > div { min-height: 0; overflow: hidden; }
-.disclosure-body[data-open] { grid-template-rows: 1fr; }
-.disclosure-body[data-open] > div { padding: 20px 2px 28px; border-bottom: 1px solid color-mix(in srgb, var(--border) 56%, transparent); }
+.report-explorer { margin-top: 34px; border-top: 1px solid color-mix(in srgb, var(--border) 58%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent); }
+.report-view-tabs { min-height: 47px; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border-bottom: 1px solid color-mix(in srgb, var(--border) 44%, transparent); }
+.report-view-tabs button { position: relative; min-width: 0; padding: 0 8px; overflow: hidden; border: 0; color: var(--text-faint); background: transparent; font-size: 9px; font-weight: 540; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; transition: color .16s, background .16s; }
+.report-view-tabs button::after { content: ''; position: absolute; left: 24%; right: 24%; bottom: -1px; height: 1px; background: transparent; }
+.report-view-tabs button:hover { color: var(--text-soft); background: color-mix(in srgb, var(--surface-muted) 46%, transparent); }
+.report-view-tabs button[data-active] { color: var(--text); font-weight: 620; }
+.report-view-tabs button[data-active]::after { background: var(--accent); }
+.report-view-tabs button:focus-visible { z-index: 1; outline: 2px solid color-mix(in srgb, var(--accent) 44%, transparent); outline-offset: -3px; border-radius: 6px; }
+.report-view-stage { min-height: 181px; padding: 23px 2px 25px; }
+.report-view { min-width: 0; }
+.report-view-context { min-height: 28px; margin-bottom: 9px; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.report-view-context span { color: var(--text); font-size: 11px; font-weight: 590; }
+.report-view-context small { overflow: hidden; color: var(--text-faint); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .composition-bar { width: 100%; height: 6px; display: flex; overflow: hidden; gap: 2px; border-radius: 999px; background: var(--surface-muted); }
 .composition-bar i { min-width: 2px; height: 100%; background: var(--accent); }
 .composition-bar i[data-tone='1'], .category-summary > i[data-tone='1'] { background: #388bfd; }
@@ -685,13 +692,19 @@
   .account-trend-labels button { font-size: 7px; }
   .account-trend-note { font-size: 9px; }
   .account-picker-heading h2 { font-size: 25px; }
+  .account-picker-search { height: 48px; }
+  .account-picker-search input { font-size: 14px; }
   .account-picker-list button { min-height: 62px; padding-inline: 2px; }
   .account-picker-list strong { font-size: 14px; }
   .account-picker-list small { font-size: 10px; }
   .account-picker-list em { font-size: 12px; }
-  .disclosure-trigger { min-height: 68px; }
-  .disclosure-trigger strong { font-size: 12px; }
-  .disclosure-trigger small { max-width: 72vw; font-size: 9px; }
+  .report-explorer { margin-top: 30px; }
+  .report-view-tabs { min-height: 49px; }
+  .report-view-tabs button { padding-inline: 4px; font-size: 10px; }
+  .report-view-stage { min-height: 210px; padding: 22px 2px 26px; }
+  .report-view-context { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .report-view-context span { font-size: 12px; }
+  .report-view-context small { max-width: 100%; font-size: 9px; }
   .weekday-row { grid-template-columns: 34px minmax(60px, 1fr) 70px; gap: 8px; }
   .weekday-row small { grid-column: 2 / -1; margin-top: -5px; text-align: left; }
   .report-toolbar { margin-bottom: 28px; gap: 15px; }
