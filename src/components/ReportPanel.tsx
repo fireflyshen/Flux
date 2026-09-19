@@ -220,6 +220,8 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
   const [selectedTrendMonth, setSelectedTrendMonth] = useState<number | null>(null)
   const [selectedTrendAccount, setSelectedTrendAccount] = useState<string | null>(null)
   const [selectedAccountTrendPoint, setSelectedAccountTrendPoint] = useState<string | null>(null)
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false)
+  const [accountPickerClosing, setAccountPickerClosing] = useState(false)
   const [openSection, setOpenSection] = useState<'account' | 'trend' | 'weekday' | 'structure' | null>(null)
   const { start, end } = periodRange(period, anchor)
 
@@ -390,12 +392,12 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
     }
   }, [currency, end, period, report, start, year])
 
+  const accountTrendPeriodAccounts = useMemo(() => behaviorCategories(analysis.days, currency), [analysis.days, currency])
   const accountTrendAccounts = useMemo(() => {
-    const periodAccounts = behaviorCategories(analysis.days, currency)
     return [...behaviorCategories(report?.days ?? [], currency).values()]
       .filter((row) => row.value > 0)
-      .sort((a, b) => (periodAccounts.get(b.account)?.value ?? 0) - (periodAccounts.get(a.account)?.value ?? 0) || b.value - a.value)
-  }, [analysis.days, currency, report])
+      .sort((a, b) => (accountTrendPeriodAccounts.get(b.account)?.value ?? 0) - (accountTrendPeriodAccounts.get(a.account)?.value ?? 0) || b.value - a.value)
+  }, [accountTrendPeriodAccounts, currency, report])
   const activeTrendAccount = accountTrendAccounts.find((row) => row.account === selectedTrendAccount)
     ?? accountTrendAccounts[0]
     ?? null
@@ -492,12 +494,9 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       <div className="disclosure-body" data-open={openSection === 'account' || undefined}>
         <div><div className="account-trend-detail">
           <div className="account-trend-toolbar">
-            <label>
-              <span>费用账户</span>
-              <select value={activeTrendAccount.account} onChange={(event) => { setSelectedTrendAccount(event.target.value); setSelectedAccountTrendPoint(null) }}>
-                {accountTrendAccounts.map((row) => <option key={row.account} value={row.account}>{row.name}</option>)}
-              </select>
-            </label>
+            <button className="account-trend-account-trigger" type="button" onClick={() => { setAccountPickerClosing(false); setAccountPickerOpen(true) }} aria-haspopup="dialog">
+              <small>费用账户</small><strong>{activeTrendAccount.name}</strong><span aria-hidden="true">›</span>
+            </button>
             <span>{rangeLabel(period, start, end)} · {accountTrendGrainCopy[accountTrendDimension]}</span>
           </div>
           <div className="trend-reading account-trend-reading" aria-live="polite">
@@ -514,25 +513,22 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
               <i className="trend-cursor" style={{ left: `${activeAccountTrendDot.x}%` }} aria-hidden="true" />
               {accountTrend.map((row, index) => {
                 const point = trendPoint(index, accountTrend.length, row.value, accountTrendMax)
-                const selectPoint = () => setSelectedAccountTrendPoint(row.key)
                 return <button
                   type="button"
                   className="account-trend-node"
                   key={row.key}
                   data-active={row.key === activeAccountTrendPoint.key || undefined}
                   data-zero={row.value === 0 || undefined}
-                  style={{ left: `${point.x}%`, top: `${point.y / 32 * 100}%` }}
-                  onPointerEnter={selectPoint}
-                  onFocus={selectPoint}
-                  onClick={selectPoint}
+                  style={{ left: `${index / accountTrend.length * 100}%`, width: `${100 / accountTrend.length}%` }}
+                  onClick={() => setSelectedAccountTrendPoint(row.key)}
                   title={`${row.label} · ${formatMoney(row.value, currency)} · ${row.transactionCount} 笔`}
                   aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}
-                />
+                ><i style={{ top: `${point.y / 32 * 100}%` }} /></button>
               })}
             </div>
             <div className="account-trend-labels" style={{ gridTemplateColumns: `repeat(${accountTrend.length}, minmax(0, 1fr))` }}>
               {accountTrend.map((row, index) => (
-                <button type="button" key={row.key} data-active={row.key === activeAccountTrendPoint.key || undefined} onPointerEnter={() => setSelectedAccountTrendPoint(row.key)} onFocus={() => setSelectedAccountTrendPoint(row.key)} onClick={() => setSelectedAccountTrendPoint(row.key)} title={`${row.label} · ${formatMoney(row.value, currency)}`} aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}>
+                <button type="button" key={row.key} data-active={row.key === activeAccountTrendPoint.key || undefined} onClick={() => setSelectedAccountTrendPoint(row.key)} title={`${row.label} · ${formatMoney(row.value, currency)}`} aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}>
                   {showAccountTrendLabel(index, accountTrend.length, accountTrendDimension) || row.key === activeAccountTrendPoint.key ? row.shortLabel : ''}
                 </button>
               ))}
@@ -684,6 +680,33 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       ) : <><div className="report-empty" data-compact>这一周期尚无 {currency} 支出</div>{(accountTrendDisclosure || trendDisclosure) && <div className="report-disclosures">{accountTrendDisclosure}{trendDisclosure}</div>}</>}
 
       <footer className="report-footnote">行为口径排除摊销与计提 · 期间成本保留全部费用</footer>
+
+      {accountPickerOpen && (
+        <DrawerShell labelledBy="account-picker-title" closeLabel="关闭账户选择" closeRequested={accountPickerClosing} onClosed={() => { setAccountPickerOpen(false); setAccountPickerClosing(false) }}>
+          <div className="drawer-content account-picker-content">
+            <div className="page-heading account-picker-heading">
+              <span className="eyebrow">账户趋势</span>
+              <h2 id="account-picker-title">选择账户</h2>
+              <div className="page-meta"><span>{rangeLabel(period, start, end)} · 按当前周期消费排序</span></div>
+            </div>
+            <div className="account-picker-list">
+              {accountTrendAccounts.map((row) => {
+                const periodRow = accountTrendPeriodAccounts.get(row.account)
+                const active = row.account === activeTrendAccount.account
+                return <button type="button" key={row.account} data-active={active || undefined} aria-pressed={active} onClick={() => {
+                  setSelectedTrendAccount(row.account)
+                  setSelectedAccountTrendPoint(null)
+                  setAccountPickerClosing(true)
+                }}>
+                  <i aria-hidden="true" />
+                  <span><strong>{row.name}</strong><small>{periodRow?.transactionCount ? `${periodRow.transactionCount} 笔` : '本期无消费'}</small></span>
+                  <em>{periodRow?.value ? formatMoney(periodRow.value, currency) : '—'}</em>
+                </button>
+              })}
+            </div>
+          </div>
+        </DrawerShell>
+      )}
 
       {selectedCategory && (
         <DrawerShell labelledBy="report-drawer-title" closeLabel="关闭分类明细" onClosed={() => setSelectedAccount(null)}>

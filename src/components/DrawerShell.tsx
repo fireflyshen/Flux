@@ -5,13 +5,14 @@ interface DrawerShellProps {
   closeLabel: string
   children: ReactNode
   onClosed: () => void
+  closeRequested?: boolean
 }
 
 function CloseIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6M20 6l-6 6 6 6" /></svg>
 }
 
-export function DrawerShell({ labelledBy, closeLabel, children, onClosed }: DrawerShellProps) {
+export function DrawerShell({ labelledBy, closeLabel, children, onClosed, closeRequested = false }: DrawerShellProps) {
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
   const frame = useRef<number | null>(null)
@@ -47,6 +48,10 @@ export function DrawerShell({ labelledBy, closeLabel, children, onClosed }: Draw
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [requestClose])
+
+  useEffect(() => {
+    if (closeRequested) requestClose()
+  }, [closeRequested, requestClose])
 
   const state = open && !closing ? 'open' : closing ? 'closing' : 'closed'
   return (
