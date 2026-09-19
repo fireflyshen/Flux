@@ -320,6 +320,9 @@
 .account-trend-reading { margin-top: 9px; }
 .account-trend-reading strong { min-width: 92px; }
 .account-trend-chart { margin-top: 5px; }
+.account-trend-node { position: absolute; z-index: 1; width: 6px; height: 6px; padding: 0; border: 1.5px solid var(--surface); border-radius: 50%; outline: 0; background: color-mix(in srgb, var(--accent) 74%, var(--surface)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); transform: translate(-50%, -50%); cursor: pointer; opacity: .78; transition: width .16s var(--ease-apple), height .16s var(--ease-apple), opacity .16s, box-shadow .16s; }
+.account-trend-node[data-zero] { background: var(--surface-raised); box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-strong) 42%, transparent); }
+.account-trend-node:hover, .account-trend-node:focus-visible, .account-trend-node[data-active] { width: 8px; height: 8px; opacity: 1; background: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
 .account-trend-labels { display: grid; margin-top: 1px; }
 .account-trend-labels button { position: relative; min-width: 0; height: 25px; padding: 0; overflow: visible; border: 0; color: var(--text-faint); background: transparent; font-size: 7px; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; transition: color .16s; }
 .account-trend-labels button::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 3px; height: 3px; border-radius: 50%; background: transparent; transform: translateX(-50%); }

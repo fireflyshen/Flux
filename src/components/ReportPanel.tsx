@@ -512,11 +512,27 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
                 <path className="trend-line" data-series="behavior" d={trendPath(accountTrend.map((row) => row.value), accountTrendMax)} />
               </svg>
               <i className="trend-cursor" style={{ left: `${activeAccountTrendDot.x}%` }} aria-hidden="true" />
-              <i className="trend-dot" data-series="behavior" style={{ left: `${activeAccountTrendDot.x}%`, top: `${activeAccountTrendDot.y / 32 * 100}%` }} aria-hidden="true" />
+              {accountTrend.map((row, index) => {
+                const point = trendPoint(index, accountTrend.length, row.value, accountTrendMax)
+                const selectPoint = () => setSelectedAccountTrendPoint(row.key)
+                return <button
+                  type="button"
+                  className="account-trend-node"
+                  key={row.key}
+                  data-active={row.key === activeAccountTrendPoint.key || undefined}
+                  data-zero={row.value === 0 || undefined}
+                  style={{ left: `${point.x}%`, top: `${point.y / 32 * 100}%` }}
+                  onPointerEnter={selectPoint}
+                  onFocus={selectPoint}
+                  onClick={selectPoint}
+                  title={`${row.label} · ${formatMoney(row.value, currency)} · ${row.transactionCount} 笔`}
+                  aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}
+                />
+              })}
             </div>
             <div className="account-trend-labels" style={{ gridTemplateColumns: `repeat(${accountTrend.length}, minmax(0, 1fr))` }}>
               {accountTrend.map((row, index) => (
-                <button type="button" key={row.key} data-active={row.key === activeAccountTrendPoint.key || undefined} onClick={() => setSelectedAccountTrendPoint(row.key)} title={`${row.label} · ${formatMoney(row.value, currency)}`} aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}>
+                <button type="button" key={row.key} data-active={row.key === activeAccountTrendPoint.key || undefined} onPointerEnter={() => setSelectedAccountTrendPoint(row.key)} onFocus={() => setSelectedAccountTrendPoint(row.key)} onClick={() => setSelectedAccountTrendPoint(row.key)} title={`${row.label} · ${formatMoney(row.value, currency)}`} aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}>
                   {showAccountTrendLabel(index, accountTrend.length, accountTrendDimension) || row.key === activeAccountTrendPoint.key ? row.shortLabel : ''}
                 </button>
               ))}
