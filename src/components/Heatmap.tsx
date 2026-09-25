@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import {
+  accountBehaviorAmountOf,
   behaviorAmountOf,
   behaviorDetailAvailable,
   behaviorGrossAmountOf,
@@ -15,6 +16,8 @@ interface HeatmapProps {
   year: number
   days: DaySpend[]
   currency: string
+  account: string | null
+  accountName: string
   selectedDate: string | null
   onSelect: (date: string) => void
 }
@@ -56,11 +59,13 @@ function buildWeeks(year: number, summaries: Map<string, DaySpend>): HeatmapDay[
   return weeks
 }
 
-export function Heatmap({ year, days, currency, selectedDate, onSelect }: HeatmapProps) {
+export function Heatmap({ year, days, currency, account, accountName, selectedDate, onSelect }: HeatmapProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const summaryMap = useMemo(() => new Map(days.map((day) => [day.date, day])), [days])
   const weeks = useMemo(() => buildWeeks(year, summaryMap), [year, summaryMap])
-  const thresholds = useMemo(() => quantileThresholds(days, currency, behaviorGrossAmountOf), [currency, days])
+  const thresholds = useMemo(() => quantileThresholds(days, currency, account
+    ? (day, selectedCurrency) => accountBehaviorAmountOf(day, account, selectedCurrency)
+    : behaviorGrossAmountOf), [account, currency, days])
   const monthLabels = useMemo(() => {
     const labels: { month: string; week: number }[] = []
     let lastMonth = -1
@@ -89,7 +94,7 @@ export function Heatmap({ year, days, currency, selectedDate, onSelect }: Heatma
   }, [year])
 
   return (
-    <div ref={scrollRef} className="heatmap-scroll" tabIndex={0} aria-label={`${year} 年 ${currency} 支出热力图`}>
+    <div ref={scrollRef} className="heatmap-scroll" tabIndex={0} aria-label={`${year} 年 ${currency} ${accountName}支出热力图`}>
       <div className="heatmap-inner">
         <div className="month-spacer" />
         <div className="month-labels" style={{ gridTemplateColumns: `repeat(${weeks.length}, var(--cell-size))` }}>
@@ -103,12 +108,12 @@ export function Heatmap({ year, days, currency, selectedDate, onSelect }: Heatma
             <div className="heatmap-week" key={week[0].date}>
               {week.map((day) => {
                 if (!day.inYear) return <span className="heatmap-blank" key={day.date} />
-                const amount = behaviorGrossAmountOf(day.summary, currency)
-                const refunds = behaviorAmountOf(day.summary, currency, 'refunds')
+                const amount = account ? accountBehaviorAmountOf(day.summary, account, currency) : behaviorGrossAmountOf(day.summary, currency)
+                const refunds = account ? accountBehaviorAmountOf(day.summary, account, currency, 'refunds') : behaviorAmountOf(day.summary, currency, 'refunds')
                 const detailAvailable = behaviorDetailAvailable(day.summary, currency)
                 const level = day.summary ? scoreLevel(amount, thresholds) : -1
                 const dateLabel = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(fromDateKey(day.date))
-                const statusLabel = !day.summary ? '没有支出记录' : !detailAvailable ? '缺少交易明细，无法计算行为支出' : `行为毛支出 ${formatMoney(amount, currency)}${refunds > 0 ? `，退款 ${formatMoney(refunds, currency)}` : ''}`
+                const statusLabel = !day.summary ? '没有支出记录' : !detailAvailable ? '缺少交易明细，无法计算行为支出' : `${account ? accountName : '行为'}毛支出 ${formatMoney(amount, currency)}${refunds > 0 ? `，退款 ${formatMoney(refunds, currency)}` : ''}`
                 return (
                   <button
                     type="button"

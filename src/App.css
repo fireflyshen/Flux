@@ -244,6 +244,13 @@
 .currency-picker { position: relative; height: 32px; display: grid; place-items: center; padding-right: 10px; border-right: 1px solid var(--border); }
 .currency-picker select { min-width: 48px; padding: 0 13px 0 0; border: 0; outline: 0; color: var(--text-faint); background: transparent; font-size: 9px; font-weight: 650; letter-spacing: .035em; cursor: pointer; appearance: none; }
 .currency-picker::after { content: '⌄'; position: absolute; right: 10px; top: 7px; color: var(--text-faint); font-size: 10px; pointer-events: none; }
+.heatmap-meta-copy { min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.heatmap-account-trigger { min-width: 0; max-width: 190px; min-height: 30px; margin-left: -7px; padding: 3px 7px; display: flex; align-items: baseline; gap: 6px; color: inherit; text-align: left; border: 0; border-radius: 7px; background: transparent; cursor: pointer; transition: background .16s; }
+.heatmap-account-trigger:hover { background: color-mix(in srgb, var(--surface-muted) 66%, transparent); }
+.heatmap-account-trigger:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 42%, transparent); outline-offset: 1px; }
+.heatmap-account-trigger small { flex: 0 0 auto; color: var(--text-faint); font-size: 8px; }
+.heatmap-account-trigger strong { min-width: 0; overflow: hidden; color: var(--text-soft); font-size: 9px; font-weight: 580; text-overflow: ellipsis; white-space: nowrap; }
+.heatmap-account-trigger > span { color: var(--text-faint); font-size: 12px; line-height: 1; }
 .heatmap-insight { color: var(--text-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
 
 .report-balance { position: relative; padding: 4px 16px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 58%, transparent); border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent-soft) 30%, transparent), transparent 46%), color-mix(in srgb, var(--surface-raised) 82%, transparent); box-shadow: 0 10px 30px rgba(13, 17, 23, .035); }
@@ -670,8 +677,11 @@
   .heatmap-week { scroll-snap-align: start; }
   .heatmap-cell:hover:not(:disabled) { transform: none; box-shadow: none; }
   .heatmap-cell:active:not(:disabled) { transform: scale(.82); }
-  .heatmap-meta { margin-left: 0; }
-  .heatmap-insight { max-width: 48%; line-height: 1.4; }
+  .heatmap-meta { margin-left: 0; align-items: flex-end; }
+  .heatmap-meta-copy { align-items: flex-start; flex-direction: column; gap: 1px; }
+  .heatmap-account-trigger { max-width: min(54vw, 210px); min-height: 32px; }
+  .heatmap-account-trigger small, .heatmap-account-trigger strong { font-size: 9px; }
+  .heatmap-insight { max-width: min(54vw, 210px); line-height: 1.4; }
   .report-panel { min-height: 60vh; padding: 0 2px 40px; }
   .report-balance { padding-inline: 12px; border-radius: 12px; }
   .report-balance article { min-height: 72px; gap: 10px; }

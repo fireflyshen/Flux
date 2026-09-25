@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { fetchDay, fetchMeta, fetchYear } from './api'
-import { behaviorDetailAvailable, behaviorGrossAmountOf, medianDailySpend, quantileThresholds, type DaySpend, type YearSpend } from './domain'
+import { accountBehaviorAmountOf, behaviorDetailAvailable, behaviorGrossAmountOf, formatMoney, isAccrualTransaction, medianDailySpend, quantileThresholds, type DaySpend, type YearSpend } from './domain'
 import { DayDrawer } from './components/DayDrawer'
+import { DrawerShell } from './components/DrawerShell'
 import { Heatmap } from './components/Heatmap'
 import { PixelLoader } from './components/PixelLoader'
 import { ReportPanel } from './components/ReportPanel'
@@ -59,6 +60,10 @@ function App() {
   const [day, setDay] = useState<DaySpend | null>(null)
   const [dayLoading, setDayLoading] = useState(false)
   const [dayError, setDayError] = useState<string | null>(null)
+  const [selectedHeatmapAccount, setSelectedHeatmapAccount] = useState<string | null>(null)
+  const [heatmapAccountPickerOpen, setHeatmapAccountPickerOpen] = useState(false)
+  const [heatmapAccountPickerClosing, setHeatmapAccountPickerClosing] = useState(false)
+  const [heatmapAccountQuery, setHeatmapAccountQuery] = useState('')
   const [systemTheme, setSystemTheme] = useState<Theme>(getSystemTheme)
   const [themeOverride, setThemeOverride] = useState<Theme | null>(readThemeOverride)
   const dayRequestId = useRef(0)
@@ -141,11 +146,39 @@ function App() {
     setDay(null)
   }
 
+  const heatmapAccounts = useMemo(() => {
+    const accounts = new Map<string, { account: string; name: string; value: number }>()
+    for (const item of summary?.days ?? []) {
+      for (const transaction of item.transactions) {
+        if (isAccrualTransaction(transaction)) continue
+        for (const category of transaction.categories) {
+          if (category.currency !== currency) continue
+          const value = Number(category.gross)
+          if (value === 0) continue
+          const row = accounts.get(category.account) ?? { account: category.account, name: category.name, value: 0 }
+          row.value += value
+          accounts.set(category.account, row)
+        }
+      }
+    }
+    return [...accounts.values()].filter((row) => row.value > 0).sort((a, b) => b.value - a.value)
+  }, [currency, summary])
+  const activeHeatmapAccount = heatmapAccounts.find((row) => row.account === selectedHeatmapAccount) ?? null
+  const heatmapAccount = activeHeatmapAccount?.account ?? null
+  const heatmapAccountName = activeHeatmapAccount?.name ?? '全部账户'
+  const filteredHeatmapAccounts = useMemo(() => {
+    const query = heatmapAccountQuery.trim().toLocaleLowerCase()
+    if (!query) return heatmapAccounts
+    return heatmapAccounts.filter((row) => row.name.toLocaleLowerCase().includes(query) || row.account.toLocaleLowerCase().includes(query))
+  }, [heatmapAccountQuery, heatmapAccounts])
+  const heatmapAmountOf = useCallback((item: DaySpend | undefined, selectedCurrency: string) => heatmapAccount
+    ? accountBehaviorAmountOf(item, heatmapAccount, selectedCurrency)
+    : behaviorGrossAmountOf(item, selectedCurrency), [heatmapAccount])
   const behaviorAvailable = useMemo(() => summary?.days.every((item) => behaviorDetailAvailable(item, currency)) ?? true, [currency, summary])
-  const thresholds = useMemo(() => quantileThresholds(summary?.days ?? [], currency, behaviorGrossAmountOf), [currency, summary])
-  const highSpendDays = useMemo(() => summary?.days.filter((item) => behaviorGrossAmountOf(item, currency) > (thresholds[3] ?? 0) && (thresholds[3] ?? 0) > 0).length ?? 0, [currency, summary, thresholds])
-  const spendDays = useMemo(() => summary?.days.filter((item) => behaviorGrossAmountOf(item, currency) > 0).length ?? 0, [currency, summary])
-  const median = useMemo(() => medianDailySpend(summary?.days ?? [], currency, behaviorGrossAmountOf), [currency, summary])
+  const thresholds = useMemo(() => quantileThresholds(summary?.days ?? [], currency, heatmapAmountOf), [currency, heatmapAmountOf, summary])
+  const highSpendDays = useMemo(() => summary?.days.filter((item) => heatmapAmountOf(item, currency) > (thresholds[3] ?? 0) && (thresholds[3] ?? 0) > 0).length ?? 0, [currency, heatmapAmountOf, summary, thresholds])
+  const spendDays = useMemo(() => summary?.days.filter((item) => heatmapAmountOf(item, currency) > 0).length ?? 0, [currency, heatmapAmountOf, summary])
+  const median = useMemo(() => medianDailySpend(summary?.days ?? [], currency, heatmapAmountOf), [currency, heatmapAmountOf, summary])
   const panelLabel = `${year} 年 ${currency} ${view === 'heatmap' ? '支出热力图' : '支出洞察'}`
 
   return (
@@ -174,18 +207,50 @@ function App() {
 
           {view === 'heatmap' ? <>
             <div className="heatmap-frame" data-loading={yearLoading || undefined}>
-              {yearLoading && !summary ? <PixelLoader /> : <Heatmap year={year} days={summary?.days ?? []} currency={currency} selectedDate={selectedDate} onSelect={(date) => void openDay(date)} />}
+              {yearLoading && !summary ? <PixelLoader /> : <Heatmap year={year} days={summary?.days ?? []} currency={currency} account={heatmapAccount} accountName={heatmapAccountName} selectedDate={selectedDate} onSelect={(date) => void openDay(date)} />}
             </div>
             <div className="heatmap-meta">
-              <span className="heatmap-insight">{!behaviorAvailable ? '缺少交易明细，无法计算行为支出' : spendDays > 0 ? `${spendDays} 个支出日 · ${highSpendDays} 个高支出日` : `还没有 ${currency} 行为支出`}</span>
-              <div className="legend" aria-label="相对本年度日常行为毛支出"><span>低</span>{[-1, 0, 1, 2, 3, 4, 5].map((level) => <i key={level} data-level={level} />)}<span>高</span></div>
+              <div className="heatmap-meta-copy">
+                <button className="heatmap-account-trigger" type="button" onClick={() => { setHeatmapAccountQuery(''); setHeatmapAccountPickerClosing(false); setHeatmapAccountPickerOpen(true) }} aria-haspopup="dialog"><small>账户</small><strong>{heatmapAccountName}</strong><span aria-hidden="true">›</span></button>
+                <span className="heatmap-insight">{!behaviorAvailable ? '缺少交易明细，无法计算行为支出' : spendDays > 0 ? `${spendDays} 个支出日 · ${highSpendDays} 个高支出日` : heatmapAccount ? `${heatmapAccountName}还没有 ${currency} 支出` : `还没有 ${currency} 行为支出`}</span>
+              </div>
+              <div className="legend" aria-label={`相对本年度${heatmapAccount ? heatmapAccountName : '日常行为'}毛支出`}><span>低</span>{[-1, 0, 1, 2, 3, 4, 5].map((level) => <i key={level} data-level={level} />)}<span>高</span></div>
               {pageError && <button className="sync-error" type="button" onClick={() => void loadYear(year)} title={pageError}>读取失败 · 重试</button>}
             </div>
           </> : <ReportPanel key={`${year}-${currency}`} year={year} report={summary} currency={currency} loading={yearLoading} error={pageError} onRetry={() => void loadYear(year)} />}
         </section>
       </main>
 
-      {selectedDate && <DayDrawer key={`${selectedDate}-${currency}`} date={selectedDate} day={day} currency={currency} median={median} loading={dayLoading} error={dayError} onClosed={closeDay} />}
+      {selectedDate && <DayDrawer key={`${selectedDate}-${currency}-${heatmapAccount ?? 'all'}`} date={selectedDate} day={day} currency={currency} account={heatmapAccount} accountName={heatmapAccountName} median={median} loading={dayLoading} error={dayError} onClosed={closeDay} />}
+
+      {heatmapAccountPickerOpen && (
+        <DrawerShell labelledBy="heatmap-account-picker-title" closeLabel="关闭账户选择" closeRequested={heatmapAccountPickerClosing} onClosed={() => { setHeatmapAccountPickerOpen(false); setHeatmapAccountPickerClosing(false) }}>
+          <div className="drawer-content account-picker-content">
+            <div className="page-heading account-picker-heading">
+              <span className="eyebrow">支出热力图</span>
+              <h2 id="heatmap-account-picker-title">选择账户</h2>
+              <div className="page-meta"><span>{year} 年 · {currency}</span></div>
+            </div>
+            <label className="account-picker-search">
+              <span className="sr-only">搜索账户</span>
+              <input type="search" value={heatmapAccountQuery} onChange={(event) => setHeatmapAccountQuery(event.target.value)} placeholder="搜索账户" aria-label="搜索账户" autoFocus />
+              <small>{filteredHeatmapAccounts.length}</small>
+            </label>
+            <div className="account-picker-list">
+              {!heatmapAccountQuery.trim() && <button className="account-picker-row" type="button" data-active={!heatmapAccount || undefined} aria-pressed={!heatmapAccount} onClick={() => { setSelectedHeatmapAccount(null); setHeatmapAccountPickerClosing(true) }}>
+                <i aria-hidden="true" /><span><strong>全部账户</strong><small>查看完整行为支出</small></span><em>—</em>
+              </button>}
+              {filteredHeatmapAccounts.map((row) => {
+                const active = row.account === heatmapAccount
+                return <button className="account-picker-row" type="button" key={row.account} data-active={active || undefined} aria-pressed={active} onClick={() => { setSelectedHeatmapAccount(row.account); setHeatmapAccountPickerClosing(true) }}>
+                  <i aria-hidden="true" /><span><strong>{row.name}</strong><small>{row.account}</small></span><em>{formatMoney(row.value, currency)}</em>
+                </button>
+              })}
+              {filteredHeatmapAccounts.length === 0 && <p className="account-picker-empty">没有匹配的账户</p>}
+            </div>
+          </div>
+        </DrawerShell>
+      )}
     </div>
   )
 }

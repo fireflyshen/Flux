@@ -87,6 +87,15 @@ export function behaviorAmountOf(day: DaySpend | undefined, currency: string, fi
     .reduce((sum, transaction) => sum + transactionAmountOf(transaction, currency, field), 0)
 }
 
+export function accountBehaviorAmountOf(day: DaySpend | undefined, account: string, currency: string, field: keyof MoneyTotals = 'gross'): number {
+  if (!day || day.transactions.length === 0) return 0
+  return day.transactions
+    .filter((transaction) => !isAccrualTransaction(transaction))
+    .reduce((sum, transaction) => sum + transaction.categories
+      .filter((category) => category.account === account && category.currency === currency)
+      .reduce((categorySum, category) => categorySum + Number(category[field]), 0), 0)
+}
+
 export function behaviorGrossAmountOf(day: DaySpend | undefined, currency: string): number {
   return behaviorAmountOf(day, currency, 'gross')
 }
