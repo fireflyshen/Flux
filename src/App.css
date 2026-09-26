@@ -951,26 +951,6 @@
   transform: translateX(-50%);
   pointer-events: none;
 }
-.trend-dot {
-  position: absolute;
-  z-index: 1;
-  width: 7px;
-  height: 7px;
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  background: var(--border-strong);
-  box-shadow: 0 0 0 1px
-    color-mix(in srgb, var(--border-strong) 50%, transparent);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-.trend-dot[data-series="behavior"] {
-  background: var(--accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
-}
-.trend-dot[data-incomplete] {
-  background: var(--surface-raised);
-}
 .trend-months {
   display: grid;
   margin-top: 1px;
@@ -985,6 +965,7 @@
   font-size: 8px;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
+  touch-action: manipulation;
   transition: color 0.16s;
 }
 .trend-months button::after {
@@ -1083,7 +1064,7 @@
 .account-trend-chart {
   margin-top: 5px;
 }
-.account-trend-node {
+.trend-node {
   position: absolute;
   z-index: 1;
   top: 0;
@@ -1094,8 +1075,9 @@
   outline: 0;
   background: transparent;
   cursor: pointer;
+  touch-action: manipulation;
 }
-.account-trend-node > i {
+.trend-node > i {
   position: absolute;
   left: 50%;
   width: 6px;
@@ -1111,13 +1093,20 @@
     box-shadow 0.16s;
   pointer-events: none;
 }
-.account-trend-node[data-zero] > i {
+.trend-node[data-zero] > i,
+.trend-node[data-unavailable] > i {
   background: var(--surface-raised);
   box-shadow: 0 0 0 1px
     color-mix(in srgb, var(--border-strong) 42%, transparent);
 }
-.account-trend-node:focus-visible > i,
-.account-trend-node[data-active] > i {
+.trend-node[data-unavailable] > i {
+  opacity: 0.38;
+}
+.trend-node[data-incomplete]:not([data-active]) > i {
+  background: var(--surface-raised);
+}
+.trend-node:focus-visible > i,
+.trend-node[data-active] > i {
   opacity: 1;
   background: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
@@ -1139,6 +1128,7 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: pointer;
+  touch-action: manipulation;
   transition: color 0.16s;
 }
 .account-trend-labels button::after {
@@ -2764,6 +2754,20 @@
   .heatmap-page {
     align-items: start;
     padding-top: max(84px, calc(env(safe-area-inset-top) + 52px));
+  }
+  .trend-plot,
+  .trend-plot svg {
+    height: 92px;
+  }
+  .trend-months button,
+  .account-trend-labels button {
+    height: 38px;
+  }
+  .trend-node:active > i {
+    opacity: 1;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--accent) 18%, transparent);
   }
 }
 

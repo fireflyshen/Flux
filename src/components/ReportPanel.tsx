@@ -891,12 +891,13 @@ export function ReportPanel({
               return (
                 <button
                   type="button"
-                  className="account-trend-node"
+                  className="trend-node"
                   key={row.key}
                   data-active={
                     row.key === activeAccountTrendPoint.key || undefined
                   }
                   data-zero={row.value === 0 || undefined}
+                  aria-pressed={row.key === activeAccountTrendPoint.key}
                   style={{
                     left: `${(index / accountTrend.length) * 100}%`,
                     width: `${100 / accountTrend.length}%`,
@@ -923,6 +924,7 @@ export function ReportPanel({
                 data-active={
                   row.key === activeAccountTrendPoint.key || undefined
                 }
+                aria-pressed={row.key === activeAccountTrendPoint.key}
                 onClick={() => setSelectedAccountTrendPoint(row.key)}
                 title={`${row.label} · ${formatMoney(row.value, currency)}`}
                 aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}
@@ -1018,18 +1020,41 @@ export function ReportPanel({
               style={{ left: `${activeBehaviorPoint.x}%` }}
               aria-hidden="true"
             />
-            {activeTrendMonth.behaviorNet !== null && (
-              <i
-                className="trend-dot"
-                data-series="behavior"
-                data-incomplete={activeTrendMonth.incomplete || undefined}
-                style={{
-                  left: `${activeBehaviorPoint.x}%`,
-                  top: `${(activeBehaviorPoint.y / 32) * 100}%`,
-                }}
-                aria-hidden="true"
-              />
-            )}
+            {analysis.monthTrend.map((row, index) => {
+              const point = trendPoint(
+                index,
+                analysis.monthTrend.length,
+                row.behaviorNet,
+                analysis.trendMax,
+              );
+              const valueLabel =
+                row.behaviorNet === null
+                  ? "行为支出暂无数据"
+                  : `行为支出 ${formatMoney(row.behaviorNet, currency)}`;
+              return (
+                <button
+                  type="button"
+                  className="trend-node"
+                  key={row.month}
+                  data-active={
+                    row.month === activeTrendMonth.month || undefined
+                  }
+                  data-zero={row.behaviorNet === 0 || undefined}
+                  data-unavailable={row.behaviorNet === null || undefined}
+                  data-incomplete={row.incomplete || undefined}
+                  aria-pressed={row.month === activeTrendMonth.month}
+                  style={{
+                    left: `${(index / analysis.monthTrend.length) * 100}%`,
+                    width: `${100 / analysis.monthTrend.length}%`,
+                  }}
+                  onClick={() => setSelectedTrendMonth(row.month)}
+                  title={`${row.label} · ${valueLabel}`}
+                  aria-label={`查看 ${row.label}，${valueLabel}`}
+                >
+                  <i style={{ top: `${(point.y / 32) * 100}%` }} />
+                </button>
+              );
+            })}
           </div>
           <div
             className="trend-months"
@@ -1042,6 +1067,7 @@ export function ReportPanel({
                 type="button"
                 key={row.month}
                 data-active={row.month === activeTrendMonth.month || undefined}
+                aria-pressed={row.month === activeTrendMonth.month}
                 onClick={() => setSelectedTrendMonth(row.month)}
                 aria-label={`查看 ${row.label}趋势数据`}
               >
