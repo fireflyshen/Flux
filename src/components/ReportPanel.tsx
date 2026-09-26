@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState } from "react";
 import {
   accrualAmountOf,
   amountOf,
@@ -14,359 +14,593 @@ import {
   type DaySpend,
   type ExpenseCategory,
   type YearSpend,
-} from '../domain'
-import { DrawerShell } from './DrawerShell'
-import { PixelLoader } from './PixelLoader'
+} from "../domain";
+import { DrawerShell } from "./DrawerShell";
+import { PixelLoader } from "./PixelLoader";
 
-type Period = 'week' | 'month' | 'quarter' | 'year'
-type ReportView = 'account' | 'trend' | 'weekday' | 'structure'
-type AccountTrendGrain = 'day' | 'week' | 'month'
+type Period = "week" | "month" | "quarter" | "year";
+type ReportView = "account" | "trend" | "weekday" | "structure";
+type AccountTrendGrain = "day" | "week" | "month";
 
-const weekdayCopy = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+const weekdayCopy = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
 interface ReportPanelProps {
-  year: number
-  report: YearSpend | null
-  currency: string
-  loading: boolean
-  error: string | null
-  onRetry: () => void
+  year: number;
+  report: YearSpend | null;
+  currency: string;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
 }
 
-const periodCopy: Record<Period, string> = { week: '周', month: '月', quarter: '季度', year: '年' }
-const accountTrendGrainCopy: Record<AccountTrendGrain, string> = { day: '按日', week: '按周', month: '按月' }
+const periodCopy: Record<Period, string> = {
+  week: "周",
+  month: "月",
+  quarter: "季度",
+  year: "年",
+};
+const accountTrendGrainCopy: Record<AccountTrendGrain, string> = {
+  day: "按日",
+  week: "按周",
+  month: "按月",
+};
 
 function yearAnchor(year: number) {
-  const now = new Date()
-  return year === now.getFullYear() ? now : new Date(year, 11, 31, 12)
+  const now = new Date();
+  return year === now.getFullYear() ? now : new Date(year, 11, 31, 12);
 }
 
 function periodRange(period: Period, anchor: Date) {
-  const start = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate(), 12)
-  const end = new Date(start)
-  if (period === 'week') {
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7))
-    end.setTime(start.getTime())
-    end.setDate(end.getDate() + 6)
-  } else if (period === 'month') {
-    start.setDate(1)
-    end.setFullYear(start.getFullYear(), start.getMonth() + 1, 0)
-  } else if (period === 'quarter') {
-    const firstMonth = Math.floor(start.getMonth() / 3) * 3
-    start.setMonth(firstMonth, 1)
-    end.setFullYear(start.getFullYear(), firstMonth + 3, 0)
+  const start = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth(),
+    anchor.getDate(),
+    12,
+  );
+  const end = new Date(start);
+  if (period === "week") {
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    end.setTime(start.getTime());
+    end.setDate(end.getDate() + 6);
+  } else if (period === "month") {
+    start.setDate(1);
+    end.setFullYear(start.getFullYear(), start.getMonth() + 1, 0);
+  } else if (period === "quarter") {
+    const firstMonth = Math.floor(start.getMonth() / 3) * 3;
+    start.setMonth(firstMonth, 1);
+    end.setFullYear(start.getFullYear(), firstMonth + 3, 0);
   } else {
-    start.setMonth(0, 1)
-    end.setFullYear(start.getFullYear(), 11, 31)
+    start.setMonth(0, 1);
+    end.setFullYear(start.getFullYear(), 11, 31);
   }
-  return { start, end }
+  return { start, end };
 }
 
 function shiftAnchor(anchor: Date, period: Period, amount: number) {
-  const next = new Date(anchor)
-  if (period === 'week') next.setDate(next.getDate() + amount * 7)
-  if (period === 'month') next.setMonth(next.getMonth() + amount)
-  if (period === 'quarter') next.setMonth(next.getMonth() + amount * 3)
-  return next
+  const next = new Date(anchor);
+  if (period === "week") next.setDate(next.getDate() + amount * 7);
+  if (period === "month") next.setMonth(next.getMonth() + amount);
+  if (period === "quarter") next.setMonth(next.getMonth() + amount * 3);
+  return next;
 }
 
 function rangeLabel(period: Period, start: Date, end: Date) {
-  if (period === 'year') return `${start.getFullYear()} 年`
-  if (period === 'quarter') return `${start.getFullYear()} 年第 ${Math.floor(start.getMonth() / 3) + 1} 季度`
-  if (period === 'month') return `${start.getFullYear()} 年 ${start.getMonth() + 1} 月`
-  const format = (date: Date) => `${date.getMonth() + 1}.${date.getDate()}`
-  return `${format(start)} — ${format(end)}`
+  if (period === "year") return `${start.getFullYear()} 年`;
+  if (period === "quarter")
+    return `${start.getFullYear()} 年第 ${Math.floor(start.getMonth() / 3) + 1} 季度`;
+  if (period === "month")
+    return `${start.getFullYear()} 年 ${start.getMonth() + 1} 月`;
+  const format = (date: Date) => `${date.getMonth() + 1}.${date.getDate()}`;
+  return `${format(start)} — ${format(end)}`;
 }
 
-function Arrow({ direction }: { direction: 'left' | 'right' }) {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={direction === 'left' ? 'm15 18-6-6 6-6' : 'm9 6 6 6-6 6'} /></svg>
+function Arrow({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d={direction === "left" ? "m15 18-6-6 6-6" : "m9 6 6 6-6 6"} />
+    </svg>
+  );
 }
 
 function daysInRange(days: DaySpend[], start: Date, end: Date) {
   return days.filter((day) => {
-    const date = fromDateKey(day.date)
-    return date >= start && date <= end
-  })
+    const date = fromDateKey(day.date);
+    return date >= start && date <= end;
+  });
 }
 
 function behaviorCategories(days: DaySpend[], currency: string) {
-  const rows = new Map<string, { account: string; name: string; value: number; transactionCount: number }>()
+  const rows = new Map<
+    string,
+    { account: string; name: string; value: number; transactionCount: number }
+  >();
   for (const day of days) {
-    for (const transaction of day.transactions.filter((item) => !isAccrualTransaction(item))) {
-      const transactionAccounts = new Set<string>()
-      for (const category of transaction.categories.filter((item) => item.currency === currency)) {
-        const row = rows.get(category.account) ?? { account: category.account, name: category.name, value: 0, transactionCount: 0 }
-        row.value += Number(category.gross)
-        rows.set(category.account, row)
-        if (Number(category.gross) !== 0) transactionAccounts.add(category.account)
+    for (const transaction of day.transactions.filter(
+      (item) => !isAccrualTransaction(item),
+    )) {
+      const transactionAccounts = new Set<string>();
+      for (const category of transaction.categories.filter(
+        (item) => item.currency === currency,
+      )) {
+        const row = rows.get(category.account) ?? {
+          account: category.account,
+          name: category.name,
+          value: 0,
+          transactionCount: 0,
+        };
+        row.value += Number(category.gross);
+        rows.set(category.account, row);
+        if (Number(category.gross) !== 0)
+          transactionAccounts.add(category.account);
       }
       for (const account of transactionAccounts) {
-        const row = rows.get(account)
-        if (row) row.transactionCount += 1
+        const row = rows.get(account);
+        if (row) row.transactionCount += 1;
       }
     }
   }
-  return rows
+  return rows;
 }
 
 interface AccountTrendPoint {
-  key: string
-  label: string
-  shortLabel: string
-  value: number
-  transactionCount: number
+  key: string;
+  label: string;
+  shortLabel: string;
+  value: number;
+  transactionCount: number;
 }
 
 function accountTrendGrain(period: Period): AccountTrendGrain {
-  if (period === 'year') return 'month'
-  if (period === 'quarter') return 'week'
-  return 'day'
+  if (period === "year") return "month";
+  if (period === "quarter") return "week";
+  return "day";
 }
 
 function accountSpendOnDay(day: DaySpend, account: string, currency: string) {
-  let value = 0
-  let transactionCount = 0
+  let value = 0;
+  let transactionCount = 0;
   for (const transaction of day.transactions) {
-    if (isAccrualTransaction(transaction)) continue
+    if (isAccrualTransaction(transaction)) continue;
     const transactionValue = transaction.categories
-      .filter((category) => category.account === account && category.currency === currency)
-      .reduce((sum, category) => sum + Number(category.gross), 0)
-    value += transactionValue
-    if (transactionValue !== 0) transactionCount += 1
+      .filter(
+        (category) =>
+          category.account === account && category.currency === currency,
+      )
+      .reduce((sum, category) => sum + Number(category.gross), 0);
+    value += transactionValue;
+    if (transactionValue !== 0) transactionCount += 1;
   }
-  return { value, transactionCount }
+  return { value, transactionCount };
 }
 
-function accountTrendPoints(days: DaySpend[], account: string, currency: string, period: Period, start: Date, end: Date) {
-  const today = new Date()
-  today.setHours(12, 0, 0, 0)
-  const visibleEnd = end < today ? new Date(end) : today
-  if (visibleEnd < start) return []
+function accountTrendPoints(
+  days: DaySpend[],
+  account: string,
+  currency: string,
+  period: Period,
+  start: Date,
+  end: Date,
+) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const visibleEnd = end < today ? new Date(end) : today;
+  if (visibleEnd < start) return [];
 
-  const grain = accountTrendGrain(period)
-  const points: AccountTrendPoint[] = []
-  let cursor = new Date(start)
+  const grain = accountTrendGrain(period);
+  const points: AccountTrendPoint[] = [];
+  let cursor = new Date(start);
   while (cursor <= visibleEnd) {
-    const bucketStart = new Date(cursor)
-    const bucketEnd = new Date(cursor)
-    if (grain === 'month') {
-      bucketStart.setDate(1)
-      bucketEnd.setFullYear(bucketStart.getFullYear(), bucketStart.getMonth() + 1, 0)
-    } else if (grain === 'week') {
-      bucketEnd.setDate(bucketEnd.getDate() + (7 - ((bucketEnd.getDay() + 6) % 7) - 1))
+    const bucketStart = new Date(cursor);
+    const bucketEnd = new Date(cursor);
+    if (grain === "month") {
+      bucketStart.setDate(1);
+      bucketEnd.setFullYear(
+        bucketStart.getFullYear(),
+        bucketStart.getMonth() + 1,
+        0,
+      );
+    } else if (grain === "week") {
+      bucketEnd.setDate(
+        bucketEnd.getDate() + (7 - ((bucketEnd.getDay() + 6) % 7) - 1),
+      );
     }
-    if (bucketEnd > visibleEnd) bucketEnd.setTime(visibleEnd.getTime())
+    if (bucketEnd > visibleEnd) bucketEnd.setTime(visibleEnd.getTime());
 
-    const label = grain === 'month'
-      ? `${bucketStart.getFullYear()} 年 ${bucketStart.getMonth() + 1} 月`
-      : grain === 'week'
-        ? `${bucketStart.getMonth() + 1}.${bucketStart.getDate()} — ${bucketEnd.getMonth() + 1}.${bucketEnd.getDate()}`
-        : formatDate(toDateKey(bucketStart))
-    const shortLabel = grain === 'month'
-      ? `${bucketStart.getMonth() + 1}月`
-      : `${bucketStart.getMonth() + 1}.${bucketStart.getDate()}`
-    const point = { key: toDateKey(bucketStart), label, shortLabel, value: 0, transactionCount: 0 }
+    const label =
+      grain === "month"
+        ? `${bucketStart.getFullYear()} 年 ${bucketStart.getMonth() + 1} 月`
+        : grain === "week"
+          ? `${bucketStart.getMonth() + 1}.${bucketStart.getDate()} — ${bucketEnd.getMonth() + 1}.${bucketEnd.getDate()}`
+          : formatDate(toDateKey(bucketStart));
+    const shortLabel =
+      grain === "month"
+        ? `${bucketStart.getMonth() + 1}月`
+        : `${bucketStart.getMonth() + 1}.${bucketStart.getDate()}`;
+    const point = {
+      key: toDateKey(bucketStart),
+      label,
+      shortLabel,
+      value: 0,
+      transactionCount: 0,
+    };
     for (const day of daysInRange(days, bucketStart, bucketEnd)) {
-      const daySpend = accountSpendOnDay(day, account, currency)
-      point.value += daySpend.value
-      point.transactionCount += daySpend.transactionCount
+      const daySpend = accountSpendOnDay(day, account, currency);
+      point.value += daySpend.value;
+      point.transactionCount += daySpend.transactionCount;
     }
-    points.push(point)
+    points.push(point);
 
-    cursor = new Date(bucketEnd)
-    cursor.setDate(cursor.getDate() + 1)
+    cursor = new Date(bucketEnd);
+    cursor.setDate(cursor.getDate() + 1);
   }
-  return points
+  return points;
 }
 
-function showAccountTrendLabel(index: number, count: number, grain: AccountTrendGrain) {
-  if (index === 0 || index === count - 1) return true
-  if (grain === 'month') return true
-  if (grain === 'week') return index % 2 === 0
-  return index % 5 === 0
+function showAccountTrendLabel(
+  index: number,
+  count: number,
+  grain: AccountTrendGrain,
+) {
+  if (index === 0 || index === count - 1) return true;
+  if (grain === "month") return true;
+  if (grain === "week") return index % 2 === 0;
+  return index % 5 === 0;
 }
 
-function trendPoint(index: number, count: number, value: number | null, max: number) {
-  const x = count <= 0 ? 50 : (index + .5) / count * 100
-  const y = value === null || max <= 0 ? 30 : 30 - Math.max(0, value) / max * 26
-  return { x, y }
+function trendPoint(
+  index: number,
+  count: number,
+  value: number | null,
+  max: number,
+) {
+  const x = count <= 0 ? 50 : ((index + 0.5) / count) * 100;
+  const y =
+    value === null || max <= 0 ? 30 : 30 - (Math.max(0, value) / max) * 26;
+  return { x, y };
 }
 
 function trendBaseline(count: number) {
-  if (count <= 0) return ''
-  const inset = 50 / count
-  return `M${inset.toFixed(2)} 30 H${(100 - inset).toFixed(2)}`
+  if (count <= 0) return "";
+  const inset = 50 / count;
+  return `M${inset.toFixed(2)} 30 H${(100 - inset).toFixed(2)}`;
 }
 
 function trendPath(values: (number | null)[], max: number) {
-  let drawing = false
-  return values.map((value, index) => {
-    if (value === null) {
-      drawing = false
-      return ''
-    }
-    const { x, y } = trendPoint(index, values.length, value, max)
-    const command = drawing ? 'L' : 'M'
-    drawing = true
-    return `${command}${x.toFixed(2)} ${y.toFixed(2)}`
-  }).filter(Boolean).join(' ')
+  let drawing = false;
+  return values
+    .map((value, index) => {
+      if (value === null) {
+        drawing = false;
+        return "";
+      }
+      const { x, y } = trendPoint(index, values.length, value, max);
+      const command = drawing ? "L" : "M";
+      drawing = true;
+      return `${command}${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .filter(Boolean)
+    .join(" ");
 }
 
-export function ReportPanel({ year, report, currency, loading, error, onRetry }: ReportPanelProps) {
-  const [period, setPeriod] = useState<Period>('month')
-  const [anchor, setAnchor] = useState(() => yearAnchor(year))
-  const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
-  const [selectedAccountScope, setSelectedAccountScope] = useState<'behavior' | 'cost'>('cost')
-  const [selectedWeekday, setSelectedWeekday] = useState<number | null>(null)
-  const [selectedTrendMonth, setSelectedTrendMonth] = useState<number | null>(null)
-  const [selectedTrendAccount, setSelectedTrendAccount] = useState<string | null>(null)
-  const [selectedAccountTrendPoint, setSelectedAccountTrendPoint] = useState<string | null>(null)
-  const [accountPickerOpen, setAccountPickerOpen] = useState(false)
-  const [accountPickerClosing, setAccountPickerClosing] = useState(false)
-  const [accountQuery, setAccountQuery] = useState('')
-  const [activeReportView, setActiveReportView] = useState<ReportView>('account')
-  const { start, end } = periodRange(period, anchor)
+export function ReportPanel({
+  year,
+  report,
+  currency,
+  loading,
+  error,
+  onRetry,
+}: ReportPanelProps) {
+  const [period, setPeriod] = useState<Period>("month");
+  const [anchor, setAnchor] = useState(() => yearAnchor(year));
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [selectedAccountScope, setSelectedAccountScope] = useState<
+    "behavior" | "cost"
+  >("cost");
+  const [selectedWeekday, setSelectedWeekday] = useState<number | null>(null);
+  const [selectedTrendMonth, setSelectedTrendMonth] = useState<number | null>(
+    null,
+  );
+  const [selectedTrendAccount, setSelectedTrendAccount] = useState<
+    string | null
+  >(null);
+  const [selectedAccountTrendPoint, setSelectedAccountTrendPoint] = useState<
+    string | null
+  >(null);
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
+  const [accountPickerClosing, setAccountPickerClosing] = useState(false);
+  const [accountQuery, setAccountQuery] = useState("");
+  const [activeReportView, setActiveReportView] =
+    useState<ReportView>("account");
+  const { start, end } = periodRange(period, anchor);
 
   const analysis = useMemo(() => {
-    const reportDays = report?.days ?? []
-    const days = daysInRange(reportDays, start, end)
-    const total = days.reduce((sum, day) => sum + amountOf(day, currency), 0)
-    const refunds = days.reduce((sum, day) => sum + amountOf(day, currency, 'refunds'), 0)
-    const behaviorNetTotal = days.reduce((sum, day) => sum + behaviorAmountOf(day, currency), 0)
-    const behaviorGrossTotal = days.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0)
-    const accrualTotal = days.reduce((sum, day) => sum + accrualAmountOf(day, currency), 0)
-    const behaviorAvailable = days.every((day) => behaviorDetailAvailable(day, currency))
-    const spendDays = days.filter((day) => behaviorGrossAmountOf(day, currency) > 0).length
-    const today = new Date()
-    const visibleEnd = end < today ? end : today
-    const elapsedDays = visibleEnd < start ? 0 : Math.floor((visibleEnd.getTime() - start.getTime()) / 86_400_000) + 1
-    const trendLastMonth = year < today.getFullYear() ? 11 : year === today.getFullYear() ? today.getMonth() : -1
-    const monthTrend = Array.from({ length: trendLastMonth + 1 }, (_, month) => {
-      const monthStart = new Date(year, month, 1, 12)
-      const monthEnd = new Date(year, month + 1, 0, 12)
-      const monthDays = daysInRange(reportDays, monthStart, monthEnd)
-      const behaviorAvailable = monthDays.every((day) => behaviorDetailAvailable(day, currency))
-      const periodCost = monthDays.reduce((sum, day) => sum + amountOf(day, currency), 0)
-      const behaviorNet = behaviorAvailable
-        ? monthDays.reduce((sum, day) => sum + behaviorAmountOf(day, currency), 0)
-        : null
-      const topTransaction = monthDays.flatMap((day) => day.transactions)
-        .filter((transaction) => !isAccrualTransaction(transaction))
-        .map((transaction) => ({
-          amount: transactionAmountOf(transaction, currency),
-          label: transaction.payee && transaction.narration
-            ? `${transaction.payee} · ${transaction.narration}`
-            : transaction.narration || transaction.payee || '未命名交易',
-        }))
-        .filter((transaction) => transaction.amount > 0)
-        .reduce<{ amount: number; label: string } | null>((largest, transaction) => !largest || transaction.amount > largest.amount ? transaction : largest, null)
-      const incomplete = year === today.getFullYear() && month === today.getMonth()
-      const hasActivity = monthDays.some((day) => amountOf(day, currency, 'gross') !== 0 || amountOf(day, currency, 'refunds') !== 0)
-      return { month, label: `${month + 1}月`, behaviorNet, periodCost, topTransaction, incomplete, hasActivity }
-    }).filter((row) => !row.incomplete || row.hasActivity)
-    const trendMax = Math.max(...monthTrend.flatMap((row) => [row.behaviorNet ?? 0, row.periodCost]), 0)
-    const weekdayOccurrences = Array<number>(7).fill(0)
+    const reportDays = report?.days ?? [];
+    const days = daysInRange(reportDays, start, end);
+    const total = days.reduce((sum, day) => sum + amountOf(day, currency), 0);
+    const refunds = days.reduce(
+      (sum, day) => sum + amountOf(day, currency, "refunds"),
+      0,
+    );
+    const behaviorNetTotal = days.reduce(
+      (sum, day) => sum + behaviorAmountOf(day, currency),
+      0,
+    );
+    const behaviorGrossTotal = days.reduce(
+      (sum, day) => sum + behaviorGrossAmountOf(day, currency),
+      0,
+    );
+    const accrualTotal = days.reduce(
+      (sum, day) => sum + accrualAmountOf(day, currency),
+      0,
+    );
+    const behaviorAvailable = days.every((day) =>
+      behaviorDetailAvailable(day, currency),
+    );
+    const spendDays = days.filter(
+      (day) => behaviorGrossAmountOf(day, currency) > 0,
+    ).length;
+    const today = new Date();
+    const visibleEnd = end < today ? end : today;
+    const elapsedDays =
+      visibleEnd < start
+        ? 0
+        : Math.floor((visibleEnd.getTime() - start.getTime()) / 86_400_000) + 1;
+    const trendLastMonth =
+      year < today.getFullYear()
+        ? 11
+        : year === today.getFullYear()
+          ? today.getMonth()
+          : -1;
+    const monthTrend = Array.from(
+      { length: trendLastMonth + 1 },
+      (_, month) => {
+        const monthStart = new Date(year, month, 1, 12);
+        const monthEnd = new Date(year, month + 1, 0, 12);
+        const monthDays = daysInRange(reportDays, monthStart, monthEnd);
+        const behaviorAvailable = monthDays.every((day) =>
+          behaviorDetailAvailable(day, currency),
+        );
+        const periodCost = monthDays.reduce(
+          (sum, day) => sum + amountOf(day, currency),
+          0,
+        );
+        const behaviorNet = behaviorAvailable
+          ? monthDays.reduce(
+              (sum, day) => sum + behaviorAmountOf(day, currency),
+              0,
+            )
+          : null;
+        const topTransaction = monthDays
+          .flatMap((day) => day.transactions)
+          .filter((transaction) => !isAccrualTransaction(transaction))
+          .map((transaction) => ({
+            amount: transactionAmountOf(transaction, currency),
+            label:
+              transaction.payee && transaction.narration
+                ? `${transaction.payee} · ${transaction.narration}`
+                : transaction.narration || transaction.payee || "未命名交易",
+          }))
+          .filter((transaction) => transaction.amount > 0)
+          .reduce<{ amount: number; label: string } | null>(
+            (largest, transaction) =>
+              !largest || transaction.amount > largest.amount
+                ? transaction
+                : largest,
+            null,
+          );
+        const incomplete =
+          year === today.getFullYear() && month === today.getMonth();
+        const hasActivity = monthDays.some(
+          (day) =>
+            amountOf(day, currency, "gross") !== 0 ||
+            amountOf(day, currency, "refunds") !== 0,
+        );
+        return {
+          month,
+          label: `${month + 1}月`,
+          behaviorNet,
+          periodCost,
+          topTransaction,
+          incomplete,
+          hasActivity,
+        };
+      },
+    ).filter((row) => !row.incomplete || row.hasActivity);
+    const trendMax = Math.max(
+      ...monthTrend.flatMap((row) => [row.behaviorNet ?? 0, row.periodCost]),
+      0,
+    );
+    const weekdayOccurrences = Array<number>(7).fill(0);
     if (visibleEnd >= start) {
-      const cursor = new Date(start)
+      const cursor = new Date(start);
       while (cursor <= visibleEnd) {
-        weekdayOccurrences[cursor.getDay()] += 1
-        cursor.setDate(cursor.getDate() + 1)
+        weekdayOccurrences[cursor.getDay()] += 1;
+        cursor.setDate(cursor.getDate() + 1);
       }
     }
-    const categories = new Map<string, ExpenseCategory & { value: number; grossValue: number; refundValue: number }>()
+    const categories = new Map<
+      string,
+      ExpenseCategory & {
+        value: number;
+        grossValue: number;
+        refundValue: number;
+      }
+    >();
     for (const day of days) {
-      for (const category of day.categories.filter((item) => item.currency === currency)) {
-        const row = categories.get(category.account) ?? { ...category, value: 0, grossValue: 0, refundValue: 0 }
-        row.value += Number(category.net)
-        row.grossValue += Number(category.gross)
-        row.refundValue += Number(category.refunds)
-        categories.set(category.account, row)
+      for (const category of day.categories.filter(
+        (item) => item.currency === currency,
+      )) {
+        const row = categories.get(category.account) ?? {
+          ...category,
+          value: 0,
+          grossValue: 0,
+          refundValue: 0,
+        };
+        row.value += Number(category.net);
+        row.grossValue += Number(category.gross);
+        row.refundValue += Number(category.refunds);
+        categories.set(category.account, row);
       }
     }
-    const categoryRows = [...categories.values()].filter((row) => row.value > 0).sort((a, b) => b.value - a.value)
-    const visibleCategories = categoryRows.slice(0, 5)
-    const hiddenCategories = categoryRows.slice(5)
+    const categoryRows = [...categories.values()]
+      .filter((row) => row.value > 0)
+      .sort((a, b) => b.value - a.value);
+    const visibleCategories = categoryRows.slice(0, 5);
+    const hiddenCategories = categoryRows.slice(5);
     if (hiddenCategories.length > 0) {
       visibleCategories.push({
         ...hiddenCategories[0],
-        account: '__others__',
-        name: 'Others · 其他',
+        account: "__others__",
+        name: "Others · 其他",
         value: hiddenCategories.reduce((sum, row) => sum + row.value, 0),
-        grossValue: hiddenCategories.reduce((sum, row) => sum + row.grossValue, 0),
-        refundValue: hiddenCategories.reduce((sum, row) => sum + row.refundValue, 0),
-      })
+        grossValue: hiddenCategories.reduce(
+          (sum, row) => sum + row.grossValue,
+          0,
+        ),
+        refundValue: hiddenCategories.reduce(
+          (sum, row) => sum + row.refundValue,
+          0,
+        ),
+      });
     }
-    const categoryTotal = categoryRows.reduce((sum, row) => sum + row.value, 0)
+    const categoryTotal = categoryRows.reduce((sum, row) => sum + row.value, 0);
     const weekdayTotals = weekdayCopy.map((name, weekday) => {
-      const matchingDays = days.filter((day) => fromDateKey(day.date).getDay() === weekday)
-      const grossTotal = matchingDays.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0)
-      const occurrences = weekdayOccurrences[weekday]
+      const matchingDays = days.filter(
+        (day) => fromDateKey(day.date).getDay() === weekday,
+      );
+      const grossTotal = matchingDays.reduce(
+        (sum, day) => sum + behaviorGrossAmountOf(day, currency),
+        0,
+      );
+      const occurrences = weekdayOccurrences[weekday];
       return {
         name,
         grossTotal,
         average: occurrences === 0 ? 0 : grossTotal / occurrences,
-        spendDays: matchingDays.filter((day) => behaviorGrossAmountOf(day, currency) > 0).length,
+        spendDays: matchingDays.filter(
+          (day) => behaviorGrossAmountOf(day, currency) > 0,
+        ).length,
         days: occurrences,
-      }
-    })
-    const weekdayMax = Math.max(...weekdayTotals.map((row) => row.average), 0)
+      };
+    });
+    const weekdayMax = Math.max(...weekdayTotals.map((row) => row.average), 0);
 
-    const comparisonMonths: { days: DaySpend[]; total: number; spendDays: number }[] = []
-    if (period === 'month' && elapsedDays > 0) {
+    const comparisonMonths: {
+      days: DaySpend[];
+      total: number;
+      spendDays: number;
+    }[] = [];
+    if (period === "month" && elapsedDays > 0) {
       for (let offset = 1; offset <= 3; offset += 1) {
-        const baselineStart = new Date(start.getFullYear(), start.getMonth() - offset, 1, 12)
-        if (baselineStart.getFullYear() !== year) continue
-        const baselineLastDay = new Date(baselineStart.getFullYear(), baselineStart.getMonth() + 1, 0, 12).getDate()
-        const baselineEnd = new Date(baselineStart.getFullYear(), baselineStart.getMonth(), Math.min(elapsedDays, baselineLastDay), 12)
-        const baselineDays = daysInRange(reportDays, baselineStart, baselineEnd)
-        if (!baselineDays.every((day) => behaviorDetailAvailable(day, currency))) continue
+        const baselineStart = new Date(
+          start.getFullYear(),
+          start.getMonth() - offset,
+          1,
+          12,
+        );
+        if (baselineStart.getFullYear() !== year) continue;
+        const baselineLastDay = new Date(
+          baselineStart.getFullYear(),
+          baselineStart.getMonth() + 1,
+          0,
+          12,
+        ).getDate();
+        const baselineEnd = new Date(
+          baselineStart.getFullYear(),
+          baselineStart.getMonth(),
+          Math.min(elapsedDays, baselineLastDay),
+          12,
+        );
+        const baselineDays = daysInRange(
+          reportDays,
+          baselineStart,
+          baselineEnd,
+        );
+        if (
+          !baselineDays.every((day) => behaviorDetailAvailable(day, currency))
+        )
+          continue;
         comparisonMonths.push({
           days: baselineDays,
-          total: baselineDays.reduce((sum, day) => sum + behaviorGrossAmountOf(day, currency), 0),
-          spendDays: baselineDays.filter((day) => behaviorGrossAmountOf(day, currency) > 0).length,
-        })
+          total: baselineDays.reduce(
+            (sum, day) => sum + behaviorGrossAmountOf(day, currency),
+            0,
+          ),
+          spendDays: baselineDays.filter(
+            (day) => behaviorGrossAmountOf(day, currency) > 0,
+          ).length,
+        });
       }
     }
 
-    const baselineAverage = comparisonMonths.length === 0 ? null : comparisonMonths.reduce((sum, month) => sum + month.total, 0) / comparisonMonths.length
-    const difference = baselineAverage === null ? null : behaviorGrossTotal - baselineAverage
-    const differenceRate = baselineAverage && difference !== null ? difference / baselineAverage : null
-    const baselineSpendDays = comparisonMonths.length === 0
-      ? null
-      : comparisonMonths.reduce((sum, month) => sum + month.spendDays, 0) / comparisonMonths.length
-    const baselineSpendDayCount = comparisonMonths.reduce((sum, month) => sum + month.spendDays, 0)
-    const baselineSpendDayAmount = comparisonMonths.length === 0 || baselineSpendDayCount === 0
-      ? null
-      : comparisonMonths.reduce((sum, month) => sum + month.total, 0)
-        / baselineSpendDayCount
-    const spendDayAmount = spendDays === 0 ? 0 : behaviorGrossTotal / spendDays
-    const spendDaysDifference = baselineSpendDays === null ? null : spendDays - baselineSpendDays
-    const spendDayAmountRate = baselineSpendDayAmount && baselineSpendDayAmount > 0
-      ? (spendDayAmount - baselineSpendDayAmount) / baselineSpendDayAmount
-      : null
-    const currentBehaviorCategories = behaviorCategories(days, currency)
-    const baselineCategoryTotals = new Map<string, { name: string; value: number }>()
+    const baselineAverage =
+      comparisonMonths.length === 0
+        ? null
+        : comparisonMonths.reduce((sum, month) => sum + month.total, 0) /
+          comparisonMonths.length;
+    const difference =
+      baselineAverage === null ? null : behaviorGrossTotal - baselineAverage;
+    const differenceRate =
+      baselineAverage && difference !== null
+        ? difference / baselineAverage
+        : null;
+    const baselineSpendDays =
+      comparisonMonths.length === 0
+        ? null
+        : comparisonMonths.reduce((sum, month) => sum + month.spendDays, 0) /
+          comparisonMonths.length;
+    const baselineSpendDayCount = comparisonMonths.reduce(
+      (sum, month) => sum + month.spendDays,
+      0,
+    );
+    const baselineSpendDayAmount =
+      comparisonMonths.length === 0 || baselineSpendDayCount === 0
+        ? null
+        : comparisonMonths.reduce((sum, month) => sum + month.total, 0) /
+          baselineSpendDayCount;
+    const spendDayAmount = spendDays === 0 ? 0 : behaviorGrossTotal / spendDays;
+    const spendDaysDifference =
+      baselineSpendDays === null ? null : spendDays - baselineSpendDays;
+    const spendDayAmountRate =
+      baselineSpendDayAmount && baselineSpendDayAmount > 0
+        ? (spendDayAmount - baselineSpendDayAmount) / baselineSpendDayAmount
+        : null;
+    const currentBehaviorCategories = behaviorCategories(days, currency);
+    const baselineCategoryTotals = new Map<
+      string,
+      { name: string; value: number }
+    >();
     for (const month of comparisonMonths) {
       for (const row of behaviorCategories(month.days, currency).values()) {
-        const totalRow = baselineCategoryTotals.get(row.account) ?? { name: row.name, value: 0 }
-        totalRow.value += row.value
-        baselineCategoryTotals.set(row.account, totalRow)
+        const totalRow = baselineCategoryTotals.get(row.account) ?? {
+          name: row.name,
+          value: 0,
+        };
+        totalRow.value += row.value;
+        baselineCategoryTotals.set(row.account, totalRow);
       }
     }
-    const driverAccounts = new Set([...currentBehaviorCategories.keys(), ...baselineCategoryTotals.keys()])
-    const drivers = [...driverAccounts].map((account) => {
-      const current = currentBehaviorCategories.get(account)
-      const baseline = baselineCategoryTotals.get(account)
-      return {
-        account,
-        name: current?.name ?? baseline?.name ?? account,
-        currentValue: current?.value ?? 0,
-        transactionCount: current?.transactionCount ?? 0,
-        difference: (current?.value ?? 0) - (baseline?.value ?? 0) / Math.max(1, comparisonMonths.length),
-      }
-    }).filter((row) => Math.abs(row.difference) >= .01)
+    const driverAccounts = new Set([
+      ...currentBehaviorCategories.keys(),
+      ...baselineCategoryTotals.keys(),
+    ]);
+    const drivers = [...driverAccounts]
+      .map((account) => {
+        const current = currentBehaviorCategories.get(account);
+        const baseline = baselineCategoryTotals.get(account);
+        return {
+          account,
+          name: current?.name ?? baseline?.name ?? account,
+          currentValue: current?.value ?? 0,
+          transactionCount: current?.transactionCount ?? 0,
+          difference:
+            (current?.value ?? 0) -
+            (baseline?.value ?? 0) / Math.max(1, comparisonMonths.length),
+        };
+      })
+      .filter((row) => Math.abs(row.difference) >= 0.01)
       .sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference))
-      .slice(0, 2)
+      .slice(0, 2);
     return {
       total,
       behaviorNetTotal,
@@ -391,341 +625,882 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       spendDaysDifference,
       spendDayAmountRate,
       drivers,
-    }
-  }, [currency, end, period, report, start, year])
+    };
+  }, [currency, end, period, report, start, year]);
 
-  const accountTrendPeriodAccounts = useMemo(() => behaviorCategories(analysis.days, currency), [analysis.days, currency])
+  const accountTrendPeriodAccounts = useMemo(
+    () => behaviorCategories(analysis.days, currency),
+    [analysis.days, currency],
+  );
   const accountTrendAccounts = useMemo(() => {
     return [...behaviorCategories(report?.days ?? [], currency).values()]
       .filter((row) => row.value > 0)
-      .sort((a, b) => (accountTrendPeriodAccounts.get(b.account)?.value ?? 0) - (accountTrendPeriodAccounts.get(a.account)?.value ?? 0) || b.value - a.value)
-  }, [accountTrendPeriodAccounts, currency, report])
+      .sort(
+        (a, b) =>
+          (accountTrendPeriodAccounts.get(b.account)?.value ?? 0) -
+            (accountTrendPeriodAccounts.get(a.account)?.value ?? 0) ||
+          b.value - a.value,
+      );
+  }, [accountTrendPeriodAccounts, currency, report]);
   const filteredTrendAccounts = useMemo(() => {
-    const query = accountQuery.trim().toLocaleLowerCase()
-    if (!query) return accountTrendAccounts
-    return accountTrendAccounts.filter((row) => row.name.toLocaleLowerCase().includes(query) || row.account.toLocaleLowerCase().includes(query))
-  }, [accountQuery, accountTrendAccounts])
-  const activeTrendAccount = accountTrendAccounts.find((row) => row.account === selectedTrendAccount)
-    ?? accountTrendAccounts[0]
-    ?? null
-  const accountTrend = useMemo(() => activeTrendAccount
-    ? accountTrendPoints(report?.days ?? [], activeTrendAccount.account, currency, period, start, end)
-    : [], [activeTrendAccount, currency, end, period, report, start])
-  const activeAccountTrendPoint = accountTrend.find((row) => row.key === selectedAccountTrendPoint)
-    ?? accountTrend.findLast((row) => row.value > 0)
-    ?? accountTrend.at(-1)
-    ?? null
-  const activeAccountTrendIndex = activeAccountTrendPoint ? accountTrend.findIndex((row) => row.key === activeAccountTrendPoint.key) : -1
-  const accountTrendMax = Math.max(...accountTrend.map((row) => row.value), 0)
+    const query = accountQuery.trim().toLocaleLowerCase();
+    if (!query) return accountTrendAccounts;
+    return accountTrendAccounts.filter(
+      (row) =>
+        row.name.toLocaleLowerCase().includes(query) ||
+        row.account.toLocaleLowerCase().includes(query),
+    );
+  }, [accountQuery, accountTrendAccounts]);
+  const activeTrendAccount =
+    accountTrendAccounts.find((row) => row.account === selectedTrendAccount) ??
+    accountTrendAccounts[0] ??
+    null;
+  const accountTrend = useMemo(
+    () =>
+      activeTrendAccount
+        ? accountTrendPoints(
+            report?.days ?? [],
+            activeTrendAccount.account,
+            currency,
+            period,
+            start,
+            end,
+          )
+        : [],
+    [activeTrendAccount, currency, end, period, report, start],
+  );
+  const activeAccountTrendPoint =
+    accountTrend.find((row) => row.key === selectedAccountTrendPoint) ??
+    accountTrend.findLast((row) => row.value > 0) ??
+    accountTrend.at(-1) ??
+    null;
+  const activeAccountTrendIndex = activeAccountTrendPoint
+    ? accountTrend.findIndex((row) => row.key === activeAccountTrendPoint.key)
+    : -1;
+  const accountTrendMax = Math.max(...accountTrend.map((row) => row.value), 0);
   const activeAccountTrendDot = activeAccountTrendPoint
-    ? trendPoint(activeAccountTrendIndex, accountTrend.length, activeAccountTrendPoint.value, accountTrendMax)
-    : null
-  const accountTrendDimension = accountTrendGrain(period)
+    ? trendPoint(
+        activeAccountTrendIndex,
+        accountTrend.length,
+        activeAccountTrendPoint.value,
+        accountTrendMax,
+      )
+    : null;
+  const accountTrendDimension = accountTrendGrain(period);
 
-  const comparisonCopy = period !== 'month' || analysis.comparisonMonths === 0
-    ? null
-    : analysis.baselineAverage === 0
-      ? analysis.behaviorGrossTotal > 0 ? '本期新增' : '保持为零'
-      : analysis.differenceRate !== null && Math.abs(analysis.differenceRate) < .02
-        ? '基本持平'
-        : `${(analysis.difference ?? 0) > 0 ? '↑' : '↓'} ${Math.round(Math.abs(analysis.differenceRate ?? 0) * 100)}%`
-  const comparisonTone = (analysis.difference ?? 0) > 0 ? 'up' : (analysis.difference ?? 0) < 0 ? 'down' : 'flat'
-  const spendDaysCopy = analysis.spendDaysDifference === null
-    ? null
-    : Math.abs(analysis.spendDaysDifference) < .5
-      ? '支出日持平'
-      : `支出日 ${analysis.spendDaysDifference > 0 ? '+' : '−'}${Math.round(Math.abs(analysis.spendDaysDifference))} 天`
-  const spendDayAmountCopy = analysis.spendDayAmountRate === null
-    ? null
-    : Math.abs(analysis.spendDayAmountRate) < .02
-      ? '支出日均额持平'
-      : `支出日均额 ${analysis.spendDayAmountRate > 0 ? '+' : '−'}${Math.round(Math.abs(analysis.spendDayAmountRate) * 100)}%`
-  const topWeekday = analysis.weekdayTotals.reduce((best, row) => row.average > best.average ? row : best, analysis.weekdayTotals[0])
-  const topCategory = analysis.visibleCategories[0]
-  const activeTrendMonth = analysis.monthTrend.find((row) => row.month === selectedTrendMonth)
-    ?? analysis.monthTrend.at(-1)
-    ?? null
-  const activeTrendIndex = activeTrendMonth ? analysis.monthTrend.findIndex((row) => row.month === activeTrendMonth.month) : -1
+  const comparisonCopy =
+    period !== "month" || analysis.comparisonMonths === 0
+      ? null
+      : analysis.baselineAverage === 0
+        ? analysis.behaviorGrossTotal > 0
+          ? "本期新增"
+          : "保持为零"
+        : analysis.differenceRate !== null &&
+            Math.abs(analysis.differenceRate) < 0.02
+          ? "基本持平"
+          : `${(analysis.difference ?? 0) > 0 ? "↑" : "↓"} ${Math.round(Math.abs(analysis.differenceRate ?? 0) * 100)}%`;
+  const comparisonTone =
+    (analysis.difference ?? 0) > 0
+      ? "up"
+      : (analysis.difference ?? 0) < 0
+        ? "down"
+        : "flat";
+  const spendDaysCopy =
+    analysis.spendDaysDifference === null
+      ? null
+      : Math.abs(analysis.spendDaysDifference) < 0.5
+        ? "支出日持平"
+        : `支出日 ${analysis.spendDaysDifference > 0 ? "+" : "−"}${Math.round(Math.abs(analysis.spendDaysDifference))} 天`;
+  const spendDayAmountCopy =
+    analysis.spendDayAmountRate === null
+      ? null
+      : Math.abs(analysis.spendDayAmountRate) < 0.02
+        ? "支出日均额持平"
+        : `支出日均额 ${analysis.spendDayAmountRate > 0 ? "+" : "−"}${Math.round(Math.abs(analysis.spendDayAmountRate) * 100)}%`;
+  const topWeekday = analysis.weekdayTotals.reduce(
+    (best, row) => (row.average > best.average ? row : best),
+    analysis.weekdayTotals[0],
+  );
+  const topCategory = analysis.visibleCategories[0];
+  const activeTrendMonth =
+    analysis.monthTrend.find((row) => row.month === selectedTrendMonth) ??
+    analysis.monthTrend.at(-1) ??
+    null;
+  const activeTrendIndex = activeTrendMonth
+    ? analysis.monthTrend.findIndex(
+        (row) => row.month === activeTrendMonth.month,
+      )
+    : -1;
   const activeBehaviorPoint = activeTrendMonth
-    ? trendPoint(activeTrendIndex, analysis.monthTrend.length, activeTrendMonth.behaviorNet, analysis.trendMax)
-    : null
-  const latestTrendMonth = analysis.monthTrend.at(-1) ?? null
-  const peakTrendMonth = analysis.monthTrend.reduce<(typeof analysis.monthTrend)[number] | null>((peak, row) => {
-    if (row.behaviorNet === null) return peak
-    return !peak || (peak.behaviorNet ?? 0) < row.behaviorNet ? row : peak
-  }, null)
+    ? trendPoint(
+        activeTrendIndex,
+        analysis.monthTrend.length,
+        activeTrendMonth.behaviorNet,
+        analysis.trendMax,
+      )
+    : null;
+  const latestTrendMonth = analysis.monthTrend.at(-1) ?? null;
+  const peakTrendMonth = analysis.monthTrend.reduce<
+    (typeof analysis.monthTrend)[number] | null
+  >((peak, row) => {
+    if (row.behaviorNet === null) return peak;
+    return !peak || (peak.behaviorNet ?? 0) < row.behaviorNet ? row : peak;
+  }, null);
   const trendSummary = latestTrendMonth
-    ? `${latestTrendMonth.label} ${latestTrendMonth.behaviorNet === null ? '—' : formatMoney(latestTrendMonth.behaviorNet, currency)}${peakTrendMonth ? peakTrendMonth.month === latestTrendMonth.month ? ' · 年内峰值' : ` · ${peakTrendMonth.label}峰值` : ''}`
-    : '暂无趋势'
-  const peakTransactionShare = peakTrendMonth?.topTransaction && peakTrendMonth.behaviorNet && peakTrendMonth.behaviorNet > 0
-    ? peakTrendMonth.topTransaction.amount / peakTrendMonth.behaviorNet
-    : 0
+    ? `${latestTrendMonth.label} ${latestTrendMonth.behaviorNet === null ? "—" : formatMoney(latestTrendMonth.behaviorNet, currency)}${peakTrendMonth ? (peakTrendMonth.month === latestTrendMonth.month ? " · 年内峰值" : ` · ${peakTrendMonth.label}峰值`) : ""}`
+    : "暂无趋势";
+  const peakTransactionShare =
+    peakTrendMonth?.topTransaction &&
+    peakTrendMonth.behaviorNet &&
+    peakTrendMonth.behaviorNet > 0
+      ? peakTrendMonth.topTransaction.amount / peakTrendMonth.behaviorNet
+      : 0;
 
-  const selectedCategory = selectedAccountScope === 'behavior'
-    ? analysis.drivers.find((row) => row.account === selectedAccount) ?? null
-    : analysis.visibleCategories.find((row) => row.account === selectedAccount) ?? null
+  const selectedCategory =
+    selectedAccountScope === "behavior"
+      ? (analysis.drivers.find((row) => row.account === selectedAccount) ??
+        null)
+      : (analysis.visibleCategories.find(
+          (row) => row.account === selectedAccount,
+        ) ?? null);
   const selectedTransactions = useMemo(() => {
-    if (!selectedAccount) return []
-    const selectedAccounts = new Set(selectedAccount === '__others__'
-      ? analysis.hiddenCategories.map((category) => category.account)
-      : [selectedAccount])
-    return analysis.days.flatMap((day) => day.transactions.flatMap((transaction) => {
-      if (selectedAccountScope === 'behavior' && isAccrualTransaction(transaction)) return []
-      const value = transaction.categories
-        .filter((category) => selectedAccounts.has(category.account) && category.currency === currency)
-        .reduce((sum, category) => sum + Number(selectedAccountScope === 'behavior' ? category.gross : category.net), 0)
-      return value === 0 ? [] : [{ day: day.date, transaction, value }]
-    })).sort((a, b) => b.day.localeCompare(a.day))
-  }, [analysis.days, analysis.hiddenCategories, currency, selectedAccount, selectedAccountScope])
+    if (!selectedAccount) return [];
+    const selectedAccounts = new Set(
+      selectedAccount === "__others__"
+        ? analysis.hiddenCategories.map((category) => category.account)
+        : [selectedAccount],
+    );
+    return analysis.days
+      .flatMap((day) =>
+        day.transactions.flatMap((transaction) => {
+          if (
+            selectedAccountScope === "behavior" &&
+            isAccrualTransaction(transaction)
+          )
+            return [];
+          const value = transaction.categories
+            .filter(
+              (category) =>
+                selectedAccounts.has(category.account) &&
+                category.currency === currency,
+            )
+            .reduce(
+              (sum, category) =>
+                sum +
+                Number(
+                  selectedAccountScope === "behavior"
+                    ? category.gross
+                    : category.net,
+                ),
+              0,
+            );
+          return value === 0 ? [] : [{ day: day.date, transaction, value }];
+        }),
+      )
+      .sort((a, b) => b.day.localeCompare(a.day));
+  }, [
+    analysis.days,
+    analysis.hiddenCategories,
+    currency,
+    selectedAccount,
+    selectedAccountScope,
+  ]);
 
   const selectedWeekdayTransactions = useMemo(() => {
-    if (selectedWeekday === null) return []
-    return analysis.days.flatMap((day) => day.transactions.flatMap((transaction) => {
-      if (isAccrualTransaction(transaction)) return []
-      const value = transactionAmountOf(transaction, currency, 'gross')
-      return value === 0 ? [] : [{ day: day.date, transaction, value }]
-    })).filter(({ day }) => fromDateKey(day).getDay() === selectedWeekday)
-      .sort((a, b) => b.day.localeCompare(a.day))
-  }, [analysis.days, currency, selectedWeekday])
+    if (selectedWeekday === null) return [];
+    return analysis.days
+      .flatMap((day) =>
+        day.transactions.flatMap((transaction) => {
+          if (isAccrualTransaction(transaction)) return [];
+          const value = transactionAmountOf(transaction, currency, "gross");
+          return value === 0 ? [] : [{ day: day.date, transaction, value }];
+        }),
+      )
+      .filter(({ day }) => fromDateKey(day).getDay() === selectedWeekday)
+      .sort((a, b) => b.day.localeCompare(a.day));
+  }, [analysis.days, currency, selectedWeekday]);
 
-  const selectedWeekdayTotal = selectedWeekdayTransactions.reduce((sum, row) => sum + row.value, 0)
+  const selectedWeekdayTotal = selectedWeekdayTransactions.reduce(
+    (sum, row) => sum + row.value,
+    0,
+  );
 
-  const canShift = (amount: number) => period !== 'year' && shiftAnchor(anchor, period, amount).getFullYear() === year
-  const accountTrendView = activeTrendAccount && activeAccountTrendPoint && activeAccountTrendDot ? (
-    <div className="report-view account-trend-detail">
-          <div className="account-trend-toolbar">
-            <button className="account-trend-account-trigger" type="button" onClick={() => { setAccountQuery(''); setAccountPickerClosing(false); setAccountPickerOpen(true) }} aria-haspopup="dialog">
-              <small>费用账户</small><strong>{activeTrendAccount.name}</strong><span aria-hidden="true">›</span>
-            </button>
-            <span>{rangeLabel(period, start, end)} · {accountTrendGrainCopy[accountTrendDimension]}</span>
-          </div>
-          <div className="trend-reading account-trend-reading" aria-live="polite">
-            <strong>{activeAccountTrendPoint.label}</strong>
-            <span>{formatMoney(activeAccountTrendPoint.value, currency)}</span>
-            <span>{activeAccountTrendPoint.transactionCount} 笔</span>
-          </div>
-          <div className="trend-chart account-trend-chart">
-            <div className="trend-plot">
-              <svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
-                <path className="trend-baseline" d={trendBaseline(accountTrend.length)} />
-                <path className="trend-line" data-series="behavior" d={trendPath(accountTrend.map((row) => row.value), accountTrendMax)} />
-              </svg>
-              <i className="trend-cursor" style={{ left: `${activeAccountTrendDot.x}%` }} aria-hidden="true" />
-              {accountTrend.map((row, index) => {
-                const point = trendPoint(index, accountTrend.length, row.value, accountTrendMax)
-                return <button
+  const canShift = (amount: number) =>
+    period !== "year" &&
+    shiftAnchor(anchor, period, amount).getFullYear() === year;
+  const accountTrendView =
+    activeTrendAccount && activeAccountTrendPoint && activeAccountTrendDot ? (
+      <div className="report-view account-trend-detail">
+        <div className="account-trend-toolbar">
+          <button
+            className="account-trend-account-trigger"
+            type="button"
+            onClick={() => {
+              setAccountQuery("");
+              setAccountPickerClosing(false);
+              setAccountPickerOpen(true);
+            }}
+            aria-haspopup="dialog"
+          >
+            <small>费用账户</small>
+            <strong>{activeTrendAccount.name}</strong>
+            <span aria-hidden="true">›</span>
+          </button>
+          <span>
+            {rangeLabel(period, start, end)} ·{" "}
+            {accountTrendGrainCopy[accountTrendDimension]}
+          </span>
+        </div>
+        <div className="trend-reading account-trend-reading" aria-live="polite">
+          <strong>{activeAccountTrendPoint.label}</strong>
+          <span>{formatMoney(activeAccountTrendPoint.value, currency)}</span>
+          <span>{activeAccountTrendPoint.transactionCount} 笔</span>
+        </div>
+        <div className="trend-chart account-trend-chart">
+          <div className="trend-plot">
+            <svg
+              viewBox="0 0 100 32"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path
+                className="trend-baseline"
+                d={trendBaseline(accountTrend.length)}
+              />
+              <path
+                className="trend-line"
+                data-series="behavior"
+                d={trendPath(
+                  accountTrend.map((row) => row.value),
+                  accountTrendMax,
+                )}
+              />
+            </svg>
+            <i
+              className="trend-cursor"
+              style={{ left: `${activeAccountTrendDot.x}%` }}
+              aria-hidden="true"
+            />
+            {accountTrend.map((row, index) => {
+              const point = trendPoint(
+                index,
+                accountTrend.length,
+                row.value,
+                accountTrendMax,
+              );
+              return (
+                <button
                   type="button"
                   className="account-trend-node"
                   key={row.key}
-                  data-active={row.key === activeAccountTrendPoint.key || undefined}
+                  data-active={
+                    row.key === activeAccountTrendPoint.key || undefined
+                  }
                   data-zero={row.value === 0 || undefined}
-                  style={{ left: `${index / accountTrend.length * 100}%`, width: `${100 / accountTrend.length}%` }}
+                  style={{
+                    left: `${(index / accountTrend.length) * 100}%`,
+                    width: `${100 / accountTrend.length}%`,
+                  }}
                   onClick={() => setSelectedAccountTrendPoint(row.key)}
                   title={`${row.label} · ${formatMoney(row.value, currency)} · ${row.transactionCount} 笔`}
                   aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}
-                ><i style={{ top: `${point.y / 32 * 100}%` }} /></button>
-              })}
-            </div>
-            <div className="account-trend-labels" style={{ gridTemplateColumns: `repeat(${accountTrend.length}, minmax(0, 1fr))` }}>
-              {accountTrend.map((row, index) => (
-                <button type="button" key={row.key} data-active={row.key === activeAccountTrendPoint.key || undefined} onClick={() => setSelectedAccountTrendPoint(row.key)} title={`${row.label} · ${formatMoney(row.value, currency)}`} aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}>
-                  {showAccountTrendLabel(index, accountTrend.length, accountTrendDimension) || row.key === activeAccountTrendPoint.key ? row.shortLabel : ''}
+                >
+                  <i style={{ top: `${(point.y / 32) * 100}%` }} />
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
-          <p className="account-trend-note">行为毛支出（退款前） · 已排除摊销与计提</p>
-    </div>
-  ) : null
-  const trendView = analysis.monthTrend.length > 1 && activeTrendMonth && activeBehaviorPoint ? (
-    <div className="report-view trend-detail">
-          <div className="report-view-context"><span>年度走势</span><small>{trendSummary}</small></div>
-          <div className="trend-reading" aria-live="polite">
-            <strong>{activeTrendMonth.label}</strong>
-            <span>行为 {activeTrendMonth.behaviorNet === null ? '—' : formatMoney(activeTrendMonth.behaviorNet, currency)}</span>
-            <span>非现金 {activeTrendMonth.behaviorNet === null ? '—' : formatMoney(activeTrendMonth.periodCost - activeTrendMonth.behaviorNet, currency)}</span>
-            <span>期间成本 {formatMoney(activeTrendMonth.periodCost, currency)}</span>
-            {activeTrendMonth.incomplete && <em>进行中</em>}
+          <div
+            className="account-trend-labels"
+            style={{
+              gridTemplateColumns: `repeat(${accountTrend.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {accountTrend.map((row, index) => (
+              <button
+                type="button"
+                key={row.key}
+                data-active={
+                  row.key === activeAccountTrendPoint.key || undefined
+                }
+                onClick={() => setSelectedAccountTrendPoint(row.key)}
+                title={`${row.label} · ${formatMoney(row.value, currency)}`}
+                aria-label={`查看 ${row.label}，${formatMoney(row.value, currency)}，${row.transactionCount} 笔`}
+              >
+                {showAccountTrendLabel(
+                  index,
+                  accountTrend.length,
+                  accountTrendDimension,
+                ) || row.key === activeAccountTrendPoint.key
+                  ? row.shortLabel
+                  : ""}
+              </button>
+            ))}
           </div>
-          {peakTrendMonth?.topTransaction && (
-            <button className="trend-peak-note" type="button" onClick={() => setSelectedTrendMonth(peakTrendMonth.month)} aria-label={`定位到${peakTrendMonth.label}峰值：${peakTrendMonth.topTransaction.label}，${formatMoney(peakTrendMonth.topTransaction.amount, currency)}`}>
-              <span><small>{peakTrendMonth.label}峰值</small><strong>{peakTransactionShare >= .3 ? '主要来自' : '最大单笔'} · {peakTrendMonth.topTransaction.label}</strong></span>
-              <em>{formatMoney(peakTrendMonth.topTransaction.amount, currency)}</em>
-            </button>
-          )}
-          <div className="trend-chart">
-            <div className="trend-plot">
-              <svg viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
-                <path className="trend-baseline" d={trendBaseline(analysis.monthTrend.length)} />
-                <path className="trend-line" data-series="behavior" d={trendPath(analysis.monthTrend.map((row) => row.behaviorNet), analysis.trendMax)} />
-              </svg>
-              <i className="trend-cursor" style={{ left: `${activeBehaviorPoint.x}%` }} aria-hidden="true" />
-              {activeTrendMonth.behaviorNet !== null && <i className="trend-dot" data-series="behavior" data-incomplete={activeTrendMonth.incomplete || undefined} style={{ left: `${activeBehaviorPoint.x}%`, top: `${activeBehaviorPoint.y / 32 * 100}%` }} aria-hidden="true" />}
-            </div>
-            <div className="trend-months" style={{ gridTemplateColumns: `repeat(${analysis.monthTrend.length}, minmax(0, 1fr))` }}>
-              {analysis.monthTrend.map((row) => (
-                <button type="button" key={row.month} data-active={row.month === activeTrendMonth.month || undefined} onClick={() => setSelectedTrendMonth(row.month)} aria-label={`查看 ${row.label}趋势数据`}>{row.month === activeTrendMonth.month ? row.label : row.month + 1}</button>
-              ))}
-            </div>
+        </div>
+        <p className="account-trend-note">
+          行为毛支出（退款前） · 已排除摊销与计提
+        </p>
+      </div>
+    ) : null;
+  const trendView =
+    analysis.monthTrend.length > 1 &&
+    activeTrendMonth &&
+    activeBehaviorPoint ? (
+      <div className="report-view trend-detail">
+        <div className="report-view-context">
+          <span>年度走势</span>
+          <small>{trendSummary}</small>
+        </div>
+        <div className="trend-reading" aria-live="polite">
+          <strong>{activeTrendMonth.label}</strong>
+          <span>
+            行为{" "}
+            {activeTrendMonth.behaviorNet === null
+              ? "—"
+              : formatMoney(activeTrendMonth.behaviorNet, currency)}
+          </span>
+          <span>
+            非现金{" "}
+            {activeTrendMonth.behaviorNet === null
+              ? "—"
+              : formatMoney(
+                  activeTrendMonth.periodCost - activeTrendMonth.behaviorNet,
+                  currency,
+                )}
+          </span>
+          <span>
+            期间成本 {formatMoney(activeTrendMonth.periodCost, currency)}
+          </span>
+          {activeTrendMonth.incomplete && <em>进行中</em>}
+        </div>
+        {peakTrendMonth?.topTransaction && (
+          <button
+            className="trend-peak-note"
+            type="button"
+            onClick={() => setSelectedTrendMonth(peakTrendMonth.month)}
+            aria-label={`定位到${peakTrendMonth.label}峰值：${peakTrendMonth.topTransaction.label}，${formatMoney(peakTrendMonth.topTransaction.amount, currency)}`}
+          >
+            <span>
+              <small>{peakTrendMonth.label}峰值</small>
+              <strong>
+                {peakTransactionShare >= 0.3 ? "主要来自" : "最大单笔"} ·{" "}
+                {peakTrendMonth.topTransaction.label}
+              </strong>
+            </span>
+            <em>
+              {formatMoney(peakTrendMonth.topTransaction.amount, currency)}
+            </em>
+          </button>
+        )}
+        <div className="trend-chart">
+          <div className="trend-plot">
+            <svg
+              viewBox="0 0 100 32"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path
+                className="trend-baseline"
+                d={trendBaseline(analysis.monthTrend.length)}
+              />
+              <path
+                className="trend-line"
+                data-series="behavior"
+                d={trendPath(
+                  analysis.monthTrend.map((row) => row.behaviorNet),
+                  analysis.trendMax,
+                )}
+              />
+            </svg>
+            <i
+              className="trend-cursor"
+              style={{ left: `${activeBehaviorPoint.x}%` }}
+              aria-hidden="true"
+            />
+            {activeTrendMonth.behaviorNet !== null && (
+              <i
+                className="trend-dot"
+                data-series="behavior"
+                data-incomplete={activeTrendMonth.incomplete || undefined}
+                style={{
+                  left: `${activeBehaviorPoint.x}%`,
+                  top: `${(activeBehaviorPoint.y / 32) * 100}%`,
+                }}
+                aria-hidden="true"
+              />
+            )}
           </div>
-    </div>
-  ) : null
+          <div
+            className="trend-months"
+            style={{
+              gridTemplateColumns: `repeat(${analysis.monthTrend.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {analysis.monthTrend.map((row) => (
+              <button
+                type="button"
+                key={row.month}
+                data-active={row.month === activeTrendMonth.month || undefined}
+                onClick={() => setSelectedTrendMonth(row.month)}
+                aria-label={`查看 ${row.label}趋势数据`}
+              >
+                {row.month === activeTrendMonth.month
+                  ? row.label
+                  : row.month + 1}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    ) : null;
 
   const weekdayView = (
     <div className="report-view">
-      <div className="report-view-context"><span>消费习惯</span><small>{topWeekday.name}平均 {formatMoney(topWeekday.average, currency)} · {topWeekday.spendDays}/{topWeekday.days} 天消费</small></div>
+      <div className="report-view-context">
+        <span>消费习惯</span>
+        <small>
+          {topWeekday.name}平均 {formatMoney(topWeekday.average, currency)} ·{" "}
+          {topWeekday.spendDays}/{topWeekday.days} 天消费
+        </small>
+      </div>
       <div className="weekday-bars">
         {analysis.weekdayTotals.map((row, weekday) => (
-          <button className="weekday-row" type="button" key={row.name} data-top={row.average === analysis.weekdayMax && row.average > 0 || undefined} onClick={() => setSelectedWeekday(weekday)} aria-haspopup="dialog">
+          <button
+            className="weekday-row"
+            type="button"
+            key={row.name}
+            data-top={
+              (row.average === analysis.weekdayMax && row.average > 0) ||
+              undefined
+            }
+            onClick={() => setSelectedWeekday(weekday)}
+            aria-haspopup="dialog"
+          >
             <span className="weekday-name">{row.name}</span>
-            <div className="weekday-track"><i style={{ width: `${analysis.weekdayMax <= 0 ? 0 : row.average / analysis.weekdayMax * 100}%` }} /></div>
-            <span className="weekday-value">{formatMoney(row.average, currency)}</span>
-            <small>{row.spendDays}/{row.days} 天 · {row.days === 0 ? 0 : Math.round(row.spendDays / row.days * 100)}%</small>
+            <div className="weekday-track">
+              <i
+                style={{
+                  width: `${analysis.weekdayMax <= 0 ? 0 : (row.average / analysis.weekdayMax) * 100}%`,
+                }}
+              />
+            </div>
+            <span className="weekday-value">
+              {formatMoney(row.average, currency)}
+            </span>
+            <small>
+              {row.spendDays}/{row.days} 天 ·{" "}
+              {row.days === 0
+                ? 0
+                : Math.round((row.spendDays / row.days) * 100)}
+              %
+            </small>
           </button>
         ))}
       </div>
     </div>
-  )
+  );
 
   const structureView = (
     <div className="report-view">
-      <div className="report-view-context"><span>期间成本结构</span><small>{topCategory ? `${topCategory.name} · ${Math.round(topCategory.value / analysis.categoryTotal * 100)}%` : '暂无分类'}</small></div>
+      <div className="report-view-context">
+        <span>期间成本结构</span>
+        <small>
+          {topCategory
+            ? `${topCategory.name} · ${Math.round((topCategory.value / analysis.categoryTotal) * 100)}%`
+            : "暂无分类"}
+        </small>
+      </div>
       <div className="composition-bar" aria-label="分类支出占比">
-        {analysis.visibleCategories.map((row, index) => <i key={row.account} data-tone={index} style={{ width: `${analysis.categoryTotal <= 0 ? 0 : row.value / analysis.categoryTotal * 100}%` }} />)}
+        {analysis.visibleCategories.map((row, index) => (
+          <i
+            key={row.account}
+            data-tone={index}
+            style={{
+              width: `${analysis.categoryTotal <= 0 ? 0 : (row.value / analysis.categoryTotal) * 100}%`,
+            }}
+          />
+        ))}
       </div>
       <div className="category-summary-grid">
         {analysis.visibleCategories.map((row, index) => (
-          <button className="category-summary" type="button" key={row.account} onClick={() => { setSelectedAccountScope('cost'); setSelectedAccount(row.account) }} aria-haspopup="dialog">
+          <button
+            className="category-summary"
+            type="button"
+            key={row.account}
+            onClick={() => {
+              setSelectedAccountScope("cost");
+              setSelectedAccount(row.account);
+            }}
+            aria-haspopup="dialog"
+          >
             <i data-tone={index} aria-hidden="true" />
-            <div><strong>{row.name}</strong><small>{formatMoney(row.value, currency)}</small></div>
-            <span>{analysis.categoryTotal <= 0 ? '0%' : `${Math.round(row.value / analysis.categoryTotal * 100)}%`}</span>
+            <div>
+              <strong>{row.name}</strong>
+              <small>{formatMoney(row.value, currency)}</small>
+            </div>
+            <span>
+              {analysis.categoryTotal <= 0
+                ? "0%"
+                : `${Math.round((row.value / analysis.categoryTotal) * 100)}%`}
+            </span>
           </button>
         ))}
       </div>
     </div>
-  )
+  );
 
   const reportViews = [
-    accountTrendView ? { key: 'account' as const, label: '账户趋势', content: accountTrendView } : null,
-    trendView ? { key: 'trend' as const, label: '年度走势', content: trendView } : null,
-    analysis.categoryRows.length > 0 ? { key: 'weekday' as const, label: '消费习惯', content: weekdayView } : null,
-    analysis.categoryRows.length > 0 ? { key: 'structure' as const, label: '成本结构', content: structureView } : null,
-  ].filter((view): view is NonNullable<typeof view> => view !== null)
-  const visibleReportView = reportViews.find((view) => view.key === activeReportView) ?? reportViews[0]
+    accountTrendView
+      ? {
+          key: "account" as const,
+          label: "账户趋势",
+          content: accountTrendView,
+        }
+      : null,
+    trendView
+      ? { key: "trend" as const, label: "年度走势", content: trendView }
+      : null,
+    analysis.categoryRows.length > 0
+      ? { key: "weekday" as const, label: "消费习惯", content: weekdayView }
+      : null,
+    analysis.categoryRows.length > 0
+      ? { key: "structure" as const, label: "成本结构", content: structureView }
+      : null,
+  ].filter((view): view is NonNullable<typeof view> => view !== null);
+  const visibleReportView =
+    reportViews.find((view) => view.key === activeReportView) ?? reportViews[0];
 
   return (
-    <section className="report-panel" aria-label={`${year} 年支出洞察`} data-loading={loading || undefined}>
+    <section
+      className="report-panel"
+      aria-label={`${year} 年支出洞察`}
+      data-loading={loading || undefined}
+    >
       <div className="report-toolbar">
         <div className="period-switch" role="group" aria-label="报表周期">
           {(Object.keys(periodCopy) as Period[]).map((value) => (
-            <button type="button" key={value} data-active={period === value || undefined} aria-pressed={period === value} onClick={() => setPeriod(value)}>{periodCopy[value]}</button>
+            <button
+              type="button"
+              key={value}
+              data-active={period === value || undefined}
+              aria-pressed={period === value}
+              onClick={() => setPeriod(value)}
+            >
+              {periodCopy[value]}
+            </button>
           ))}
         </div>
         <div className="period-navigation">
-          <button type="button" disabled={!canShift(-1)} aria-label="上一周期" onClick={() => setAnchor(shiftAnchor(anchor, period, -1))}><Arrow direction="left" /></button>
+          <button
+            type="button"
+            disabled={!canShift(-1)}
+            aria-label="上一周期"
+            onClick={() => setAnchor(shiftAnchor(anchor, period, -1))}
+          >
+            <Arrow direction="left" />
+          </button>
           <span aria-live="polite">{rangeLabel(period, start, end)}</span>
-          <button type="button" disabled={!canShift(1)} aria-label="下一周期" onClick={() => setAnchor(shiftAnchor(anchor, period, 1))}><Arrow direction="right" /></button>
+          <button
+            type="button"
+            disabled={!canShift(1)}
+            aria-label="下一周期"
+            onClick={() => setAnchor(shiftAnchor(anchor, period, 1))}
+          >
+            <Arrow direction="right" />
+          </button>
         </div>
       </div>
 
       {loading && !report ? (
-        <div className="report-empty"><PixelLoader /></div>
+        <div className="report-empty">
+          <PixelLoader />
+        </div>
       ) : error ? (
-        <div className="report-empty"><button type="button" onClick={onRetry} title={error}>账本读取失败 · 重试</button></div>
+        <div className="report-empty">
+          <button type="button" onClick={onRetry} title={error}>
+            账本读取失败 · 重试
+          </button>
+        </div>
       ) : analysis.categoryRows.length > 0 ? (
         <>
           <section className="report-balance" aria-label="周期核心数据">
             <article>
-              <div><span>行为支出</span><small>{analysis.behaviorAvailable ? `${analysis.spendDays} 个支出日 · 净支出 ${formatMoney(analysis.behaviorNetTotal, currency)}` : '缺少交易明细，未使用期间成本代替'}</small></div>
+              <div>
+                <span>行为支出</span>
+                <small>
+                  {analysis.behaviorAvailable
+                    ? `${analysis.spendDays} 个支出日 · 净支出 ${formatMoney(analysis.behaviorNetTotal, currency)}`
+                    : "缺少交易明细，未使用期间成本代替"}
+                </small>
+              </div>
               <div className="report-figure">
-                <strong>{analysis.behaviorAvailable ? formatMoney(analysis.behaviorGrossTotal, currency) : '—'}</strong>
-                {comparisonCopy && <em data-tone={comparisonTone}>{comparisonCopy}</em>}
+                <strong>
+                  {analysis.behaviorAvailable
+                    ? formatMoney(analysis.behaviorGrossTotal, currency)
+                    : "—"}
+                </strong>
+                {comparisonCopy && (
+                  <em data-tone={comparisonTone}>{comparisonCopy}</em>
+                )}
               </div>
             </article>
             <article>
-              <div><span>期间成本</span><small>含非现金成本 {formatMoney(analysis.accrualTotal, currency)}{analysis.refunds > 0 ? ` · 退款 ${formatMoney(analysis.refunds, currency)}` : ''}</small></div>
-              <div className="report-figure"><strong>{formatMoney(analysis.total, currency)}</strong></div>
+              <div>
+                <span>期间成本</span>
+                <small>
+                  含非现金成本 {formatMoney(analysis.accrualTotal, currency)}
+                  {analysis.refunds > 0
+                    ? ` · 退款 ${formatMoney(analysis.refunds, currency)}`
+                    : ""}
+                </small>
+              </div>
+              <div className="report-figure">
+                <strong>{formatMoney(analysis.total, currency)}</strong>
+              </div>
             </article>
           </section>
 
-          {analysis.behaviorAvailable && analysis.comparisonMonths > 0 && (spendDaysCopy || spendDayAmountCopy || analysis.drivers.length > 0) && (
-            <section className="change-summary" aria-labelledby="change-summary-title">
-              <div className="quiet-heading"><span id="change-summary-title">主要变化</span><small>较近 {analysis.comparisonMonths} 个月同期</small></div>
-              {(spendDaysCopy || spendDayAmountCopy) && <p className="change-factors">{[spendDaysCopy, spendDayAmountCopy].filter(Boolean).join(' · ')}</p>}
-              {analysis.drivers.length > 0 && (
-                <div className="change-list">
-                  {analysis.drivers.map((driver) => (
-                    <button type="button" key={driver.account} onClick={() => { setSelectedAccountScope('behavior'); setSelectedAccount(driver.account) }} aria-haspopup="dialog">
-                      <span><strong>{driver.name}</strong><small>{driver.transactionCount > 0 ? `本期 ${formatMoney(driver.currentValue, currency)} · ${driver.transactionCount} 笔` : '本期无支出'}</small></span>
-                      <em data-tone={driver.difference > 0 ? 'up' : 'down'}>{driver.difference > 0 ? '+' : ''}{formatMoney(driver.difference, currency)}</em>
-                    </button>
-                  ))}
+          {analysis.behaviorAvailable &&
+            analysis.comparisonMonths > 0 &&
+            (spendDaysCopy ||
+              spendDayAmountCopy ||
+              analysis.drivers.length > 0) && (
+              <section
+                className="change-summary"
+                aria-labelledby="change-summary-title"
+              >
+                <div className="quiet-heading">
+                  <span id="change-summary-title">主要变化</span>
+                  <small>较近 {analysis.comparisonMonths} 个月同期</small>
                 </div>
-              )}
-            </section>
-          )}
+                {(spendDaysCopy || spendDayAmountCopy) && (
+                  <p className="change-factors">
+                    {[spendDaysCopy, spendDayAmountCopy]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
+                {analysis.drivers.length > 0 && (
+                  <div className="change-list">
+                    {analysis.drivers.map((driver) => (
+                      <button
+                        type="button"
+                        key={driver.account}
+                        onClick={() => {
+                          setSelectedAccountScope("behavior");
+                          setSelectedAccount(driver.account);
+                        }}
+                        aria-haspopup="dialog"
+                      >
+                        <span>
+                          <strong>{driver.name}</strong>
+                          <small>
+                            {driver.transactionCount > 0
+                              ? `本期 ${formatMoney(driver.currentValue, currency)} · ${driver.transactionCount} 笔`
+                              : "本期无支出"}
+                          </small>
+                        </span>
+                        <em data-tone={driver.difference > 0 ? "up" : "down"}>
+                          {driver.difference > 0 ? "+" : ""}
+                          {formatMoney(driver.difference, currency)}
+                        </em>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
           <section className="report-explorer" aria-label="报表分析">
-            <div className="report-view-tabs" role="tablist" aria-label="分析维度">
+            <div
+              className="report-view-tabs"
+              role="tablist"
+              aria-label="分析维度"
+            >
               {reportViews.map((view) => (
-                <button type="button" role="tab" key={view.key} aria-selected={view.key === visibleReportView.key} data-active={view.key === visibleReportView.key || undefined} onClick={() => setActiveReportView(view.key)}>{view.label}</button>
+                <button
+                  type="button"
+                  role="tab"
+                  key={view.key}
+                  aria-selected={view.key === visibleReportView.key}
+                  data-active={view.key === visibleReportView.key || undefined}
+                  onClick={() => setActiveReportView(view.key)}
+                >
+                  {view.label}
+                </button>
               ))}
             </div>
-            <div className="report-view-stage" role="tabpanel" aria-label={visibleReportView.label}>{visibleReportView.content}</div>
+            <div
+              className="report-view-stage"
+              role="tabpanel"
+              aria-label={visibleReportView.label}
+            >
+              {visibleReportView.content}
+            </div>
           </section>
         </>
-      ) : <><div className="report-empty" data-compact>这一周期尚无 {currency} 支出</div>{(accountTrendView || trendView) && <section className="report-explorer" aria-label="报表分析"><div className="report-view-tabs" role="tablist" aria-label="分析维度">{reportViews.map((view) => <button type="button" role="tab" key={view.key} aria-selected={view.key === visibleReportView.key} data-active={view.key === visibleReportView.key || undefined} onClick={() => setActiveReportView(view.key)}>{view.label}</button>)}</div><div className="report-view-stage" role="tabpanel" aria-label={visibleReportView.label}>{visibleReportView.content}</div></section>}</>}
+      ) : (
+        <>
+          <div className="report-empty" data-compact>
+            这一周期尚无 {currency} 支出
+          </div>
+          {(accountTrendView || trendView) && (
+            <section className="report-explorer" aria-label="报表分析">
+              <div
+                className="report-view-tabs"
+                role="tablist"
+                aria-label="分析维度"
+              >
+                {reportViews.map((view) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    key={view.key}
+                    aria-selected={view.key === visibleReportView.key}
+                    data-active={
+                      view.key === visibleReportView.key || undefined
+                    }
+                    onClick={() => setActiveReportView(view.key)}
+                  >
+                    {view.label}
+                  </button>
+                ))}
+              </div>
+              <div
+                className="report-view-stage"
+                role="tabpanel"
+                aria-label={visibleReportView.label}
+              >
+                {visibleReportView.content}
+              </div>
+            </section>
+          )}
+        </>
+      )}
 
-      <footer className="report-footnote">行为口径排除摊销与计提 · 期间成本保留全部费用</footer>
+      <footer className="report-footnote">
+        行为口径排除摊销与计提 · 期间成本保留全部费用
+      </footer>
 
       {accountPickerOpen && (
-        <DrawerShell labelledBy="account-picker-title" closeLabel="关闭账户选择" closeRequested={accountPickerClosing} onClosed={() => { setAccountPickerOpen(false); setAccountPickerClosing(false) }}>
+        <DrawerShell
+          labelledBy="account-picker-title"
+          closeLabel="关闭账户选择"
+          closeRequested={accountPickerClosing}
+          onClosed={() => {
+            setAccountPickerOpen(false);
+            setAccountPickerClosing(false);
+          }}
+        >
           <div className="drawer-content account-picker-content">
             <div className="page-heading account-picker-heading">
               <span className="eyebrow">账户趋势</span>
               <h2 id="account-picker-title">选择账户</h2>
-              <div className="page-meta"><span>{rangeLabel(period, start, end)} · 按当前周期消费排序</span></div>
+              <div className="page-meta">
+                <span>
+                  {rangeLabel(period, start, end)} · 按当前周期消费排序
+                </span>
+              </div>
             </div>
             <label className="account-picker-search">
               <span className="sr-only">搜索账户</span>
-              <input type="search" value={accountQuery} onChange={(event) => setAccountQuery(event.target.value)} placeholder="搜索账户" aria-label="搜索账户" autoFocus />
+              <input
+                type="search"
+                value={accountQuery}
+                onChange={(event) => setAccountQuery(event.target.value)}
+                placeholder="搜索账户"
+                aria-label="搜索账户"
+                autoFocus
+              />
               <small>{filteredTrendAccounts.length}</small>
             </label>
             <div className="account-picker-list">
               {filteredTrendAccounts.map((row) => {
-                const periodRow = accountTrendPeriodAccounts.get(row.account)
-                const active = row.account === activeTrendAccount.account
-                return <button className="account-picker-row" type="button" key={row.account} data-active={active || undefined} aria-pressed={active} onClick={() => {
-                  setSelectedTrendAccount(row.account)
-                  setSelectedAccountTrendPoint(null)
-                  setAccountPickerClosing(true)
-                }}>
-                  <i aria-hidden="true" />
-                  <span><strong>{row.name}</strong><small>{periodRow?.transactionCount ? `${periodRow.transactionCount} 笔` : '本期无消费'}</small></span>
-                  <em>{periodRow?.value ? formatMoney(periodRow.value, currency) : '—'}</em>
-                </button>
+                const periodRow = accountTrendPeriodAccounts.get(row.account);
+                const active = row.account === activeTrendAccount.account;
+                return (
+                  <button
+                    className="account-picker-row"
+                    type="button"
+                    key={row.account}
+                    data-active={active || undefined}
+                    aria-pressed={active}
+                    onClick={() => {
+                      setSelectedTrendAccount(row.account);
+                      setSelectedAccountTrendPoint(null);
+                      setAccountPickerClosing(true);
+                    }}
+                  >
+                    <i aria-hidden="true" />
+                    <span>
+                      <strong>{row.name}</strong>
+                      <small>
+                        {periodRow?.transactionCount
+                          ? `${periodRow.transactionCount} 笔`
+                          : "本期无消费"}
+                      </small>
+                    </span>
+                    <em>
+                      {periodRow?.value
+                        ? formatMoney(periodRow.value, currency)
+                        : "—"}
+                    </em>
+                  </button>
+                );
               })}
-              {filteredTrendAccounts.length === 0 && <p className="account-picker-empty">没有匹配的账户</p>}
+              {filteredTrendAccounts.length === 0 && (
+                <p className="account-picker-empty">没有匹配的账户</p>
+              )}
             </div>
           </div>
         </DrawerShell>
       )}
 
       {selectedCategory && (
-        <DrawerShell labelledBy="report-drawer-title" closeLabel="关闭分类明细" onClosed={() => setSelectedAccount(null)}>
+        <DrawerShell
+          labelledBy="report-drawer-title"
+          closeLabel="关闭分类明细"
+          onClosed={() => setSelectedAccount(null)}
+        >
           <div className="drawer-content report-detail-content">
             <div className="page-heading report-detail-heading">
               <span className="eyebrow">{rangeLabel(period, start, end)}</span>
               <h2 id="report-drawer-title">{selectedCategory.name}</h2>
-              <div className="page-meta"><strong>{formatMoney('currentValue' in selectedCategory ? selectedCategory.currentValue : selectedCategory.value, currency)}</strong><span>{selectedTransactions.length} 笔交易</span></div>
+              <div className="page-meta">
+                <strong>
+                  {formatMoney(
+                    "currentValue" in selectedCategory
+                      ? selectedCategory.currentValue
+                      : selectedCategory.value,
+                    currency,
+                  )}
+                </strong>
+                <span>{selectedTransactions.length} 笔交易</span>
+              </div>
             </div>
             <section aria-labelledby="report-transaction-title">
-              <div className="drawer-section-heading"><h3 id="report-transaction-title">具体明细</h3><span>按日期倒序</span></div>
+              <div className="drawer-section-heading">
+                <h3 id="report-transaction-title">具体明细</h3>
+                <span>按日期倒序</span>
+              </div>
               <div className="transaction-list report-transaction-list">
                 {selectedTransactions.map(({ day, transaction, value }) => (
-                  <article className="transaction-row report-transaction-row" key={`${day}-${transaction.id}`}>
+                  <article
+                    className="transaction-row report-transaction-row"
+                    key={`${day}-${transaction.id}`}
+                  >
                     <time dateTime={day}>{formatDate(day)}</time>
-                    <div><strong>{transaction.payee || transaction.narration || '未命名交易'}</strong>{transaction.payee && transaction.narration && <small>{transaction.narration}</small>}</div>
+                    <div>
+                      <strong>
+                        {transaction.payee ||
+                          transaction.narration ||
+                          "未命名交易"}
+                      </strong>
+                      {transaction.payee && transaction.narration && (
+                        <small>{transaction.narration}</small>
+                      )}
+                    </div>
                     <span>{formatMoney(value, currency)}</span>
                   </article>
                 ))}
@@ -736,28 +1511,60 @@ export function ReportPanel({ year, report, currency, loading, error, onRetry }:
       )}
 
       {selectedWeekday !== null && (
-        <DrawerShell labelledBy="weekday-drawer-title" closeLabel="关闭星期明细" onClosed={() => setSelectedWeekday(null)}>
+        <DrawerShell
+          labelledBy="weekday-drawer-title"
+          closeLabel="关闭星期明细"
+          onClosed={() => setSelectedWeekday(null)}
+        >
           <div className="drawer-content report-detail-content">
             <div className="page-heading report-detail-heading">
               <span className="eyebrow">{rangeLabel(period, start, end)}</span>
-              <h2 id="weekday-drawer-title">{weekdayCopy[selectedWeekday]}消费明细</h2>
-              <div className="page-meta"><strong>行为毛支出 {formatMoney(selectedWeekdayTotal, currency)}</strong><span>{selectedWeekdayTransactions.length} 笔交易</span></div>
+              <h2 id="weekday-drawer-title">
+                {weekdayCopy[selectedWeekday]}消费明细
+              </h2>
+              <div className="page-meta">
+                <strong>
+                  行为毛支出 {formatMoney(selectedWeekdayTotal, currency)}
+                </strong>
+                <span>{selectedWeekdayTransactions.length} 笔交易</span>
+              </div>
             </div>
             <section aria-labelledby="weekday-transaction-title">
-              <div className="drawer-section-heading"><h3 id="weekday-transaction-title">具体明细</h3><span>按日期倒序</span></div>
+              <div className="drawer-section-heading">
+                <h3 id="weekday-transaction-title">具体明细</h3>
+                <span>按日期倒序</span>
+              </div>
               <div className="transaction-list report-transaction-list">
-                {selectedWeekdayTransactions.length === 0 ? <div className="drawer-empty">这一周期没有该星期的支出</div> : selectedWeekdayTransactions.map(({ day, transaction, value }) => (
-                  <article className="transaction-row report-transaction-row" key={`${day}-${transaction.id}`}>
-                    <time dateTime={day}>{formatDate(day)}</time>
-                    <div><strong>{transaction.payee || transaction.narration || '未命名交易'}</strong>{transaction.payee && transaction.narration && <small>{transaction.narration}</small>}</div>
-                    <span>{formatMoney(value, currency)}</span>
-                  </article>
-                ))}
+                {selectedWeekdayTransactions.length === 0 ? (
+                  <div className="drawer-empty">这一周期没有该星期的支出</div>
+                ) : (
+                  selectedWeekdayTransactions.map(
+                    ({ day, transaction, value }) => (
+                      <article
+                        className="transaction-row report-transaction-row"
+                        key={`${day}-${transaction.id}`}
+                      >
+                        <time dateTime={day}>{formatDate(day)}</time>
+                        <div>
+                          <strong>
+                            {transaction.payee ||
+                              transaction.narration ||
+                              "未命名交易"}
+                          </strong>
+                          {transaction.payee && transaction.narration && (
+                            <small>{transaction.narration}</small>
+                          )}
+                        </div>
+                        <span>{formatMoney(value, currency)}</span>
+                      </article>
+                    ),
+                  )
+                )}
               </div>
             </section>
           </div>
         </DrawerShell>
       )}
     </section>
-  )
+  );
 }
